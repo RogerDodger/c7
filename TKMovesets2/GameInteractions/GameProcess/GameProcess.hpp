@@ -138,7 +138,7 @@ public:
 	template<typename T>
 	void write(gameAddr addr, T value)
 	{
-		WriteProcessMemory(m_processHandle, (LPVOID)addr, (LPCVOID)&T, sizeof(T), nullptr);
+		WriteProcessMemory(m_processHandle, (LPVOID)addr, (LPCVOID)&value, sizeof(T), nullptr);
 	};
 	// Reads a value in the remote process's memory, adapting to the expected return value type's size
 	template<typename T>
