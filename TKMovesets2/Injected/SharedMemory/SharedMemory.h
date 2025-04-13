@@ -28,6 +28,7 @@ struct SharedMemBase
 {
 	// Contains the version of the moveset loader
 	char moveset_loader_version[32];
+
 	// Only load custom movesets if locked in
 	bool locked_in;
 	// Status of the automatic moveset syncing
@@ -36,6 +37,9 @@ struct SharedMemBase
 	MovesetLoaderMode_ moveset_loader_mode;
 	// Stores the path to the program, used in order to tell the moveset loader where to look for movesets if needed
 	wchar_t program_path[MAX_PATH];
+
+	// Tell main process to autoload custom movesets based on the players' char_id
+	bool request_custom_movesets;
 
 	bool IsAttemptingOnlinePlay() const {
 		return locked_in && moveset_loader_mode && (moveset_sync_status != MovesetSyncStatus_NotStarted && moveset_sync_status != MovesetSyncStatus_AcceptPackets);

@@ -18,19 +18,13 @@ void OnlineT7::Init()
 
 void OnlineT7::OnMovesetImport(movesetInfo* displayedMoveset, unsigned int playerid, const s_lastLoaded& lastLoadedMoveset)
 {
-    while (displayedMovesets->size() <= playerid) {
-        displayedMovesets->push_back({.size = 0});
+    int32_t charId = lastLoadedMoveset.charId;
+    DEBUG_LOG("OnMovesetImport for char_id %d\n", charId);
+    if (charId >= 0 && charId < sizeof(m_sharedMemPtr->chars)) {
+        m_sharedMemPtr->chars[charId].addr = lastLoadedMoveset.address;
+        m_sharedMemPtr->chars[charId].size = lastLoadedMoveset.size;
+        m_sharedMemPtr->chars[charId].is_initialized = false;
     }
-
-    (*displayedMovesets)[playerid] = *displayedMoveset;
-
-    m_sharedMemPtr->players[playerid].crc32 = lastLoadedMoveset.crc32;
-    m_sharedMemPtr->players[playerid].custom_moveset_addr = lastLoadedMoveset.address;
-    m_sharedMemPtr->players[playerid].custom_moveset_size = lastLoadedMoveset.size;
-    m_sharedMemPtr->players[playerid].custom_moveset_original_data_addr = lastLoadedMoveset.originalDataAddress;
-    m_sharedMemPtr->players[playerid].custom_moveset_original_data_size = lastLoadedMoveset.originalDataSize;
-    m_sharedMemPtr->players[playerid].moveset_character_id = lastLoadedMoveset.charId;
-    m_sharedMemPtr->players[playerid].is_initialized = false;
 }
 
 void OnlineT7::ClearMovesetSelection(unsigned int playerid)

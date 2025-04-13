@@ -102,77 +102,46 @@ MainWindow::MainWindow()
 
 	m_onlineMenu.gameHelper = &m_sharedMem;
 	m_persistentPlayMenu.gameHelper = &m_sharedMem;
+	m_statusMenu.gameHelper = &m_sharedMem;
 
 	sideMenu.requestedUpdatePtr = &requestedUpdate;
 	sideMenu.SetAddrFile(m_addrFile);
-
-	{
-		// Detect running games and latch on to them if possible
-		bool attachedExtractor = false;
-		bool attachedImporter = false;
-		bool attachedOnline = false;
-
-		auto processList = GameProcessUtils::GetRunningProcessList();
-
-		// Loop through every game we support
-		for (unsigned int gameIdx = 0; gameIdx < Games::GetGamesCount(); ++gameIdx)
-		{
-			auto gameInfo = Games::GetGameInfoFromIndex(gameIdx);
-
-			const char* processName = gameInfo->processName;
-			processEntry* p;
-
-			// Detect if the game is running
-			{
-				bool isRunning = false;
-				for (auto& process : processList)
-				{
-					if (process.name == processName)
-					{
-						p = &process;
-						isRunning = true;
-						break;
-					}
-				}
-				if (!isRunning) {
-					continue;
-				}
-			}
-
-			if (!gameInfo->MatchesProcessWindowName(p->pid)) {
-				continue;
-			}
-
-			if (!attachedExtractor && gameInfo->extractor != nullptr) {
-				m_extractor.SetTargetProcess(gameInfo);
-				attachedExtractor = true;
-				DEBUG_LOG("Extraction-compatible game '%s' already running: attaching.\n", processName);
-			}
-
-			if (!attachedImporter && gameInfo->importer != nullptr) {
-				m_importer.SetTargetProcess(gameInfo);
-				attachedImporter = true;
-				DEBUG_LOG("Importation-compatible game '%s' already running: attaching.\n", processName);
-			}
-
-			if (!attachedOnline && gameInfo->onlineHandler != nullptr) {
-				m_sharedMem.SetTargetProcess(gameInfo);
-				attachedOnline = true;
-				DEBUG_LOG("Online-compatible game '%s' already running: attaching.\n", processName);
-			}
-
-		}
-	}
 
 	m_storage.StartThread();
 	m_extractor.StartThread();
 	m_importer.StartThread();
 	m_sharedMem.StartThread();
+
+	m_sharedMem.SetTargetProcess(Games::GetGameInfoFromIdentifier(GameId_T7));
 }
 
 // Actual rendering function
 void MainWindow::Update()
 {
+	// Inject into running process
+	if (m_sharedMem.IsAttached() && m_sharedMem.process.CheckRunning()) {
+		m_sharedMem.InjectDll();
+		m_sharedMem.SetSharedMemDestroyBehaviour(true);
+	}
+
+	// Autoload new movesets into shared memory
+	if (m_sharedMem.isMemoryLoaded) {
+		while (m_storage.newMovesets.size() > 0) {
+			movesetInfo* moveset = m_storage.newMovesets.back();
+			m_sharedMem.QueueCharacterImportation(moveset, 0, ImportSettings_BasicLoadOnly);
+			m_storage.newMovesets.pop_back();
+		}
+	}
+
+	// Repopulate the "new" movesets to cover case where game was closed and re-open
+	if (m_sharedMem.wasDetached) {
+		m_sharedMem.wasDetached = false;
+		DEBUG_LOG("MainWindow::Update() repopulating newMovesets\n");
+		for (auto& moveset : m_storage.extractedMovesets) {
+			m_storage.newMovesets.push_back(moveset);
+		}
+	}
+
 	// Main window rendering
 	ImGuiViewport* mainView = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(mainView->Pos);
@@ -192,14 +161,14 @@ void MainWindow::Update()
 			ImGui::BeginChild("SideBar", ImVec2(sidebarWidth, 0), true, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking);
 
 			// Render nav menu
-			m_navMenu.Render(sideMenuWidth, m_persistentPlayMenu.gameHelper->lockedIn);
+			m_navMenu.Render(sideMenuWidth - 5, m_persistentPlayMenu.gameHelper->lockedIn);
 
-			ImGui::NewLine();
-			ImGui::NewLine();
-			ImGui::Separator();
+			//ImGui::NewLine();
+			//ImGui::NewLine();
+			//ImGui::Separator();
 
 			// Render side menu
-			sideMenu.Render(sideMenuWidth);
+			// sideMenu.Render(sideMenuWidth);
 
 			ImGui::EndChild();
 		}
@@ -220,6 +189,9 @@ void MainWindow::Update()
 				break;
 			case NAV__MENU_ONLINE_PLAY:
 				m_onlineMenu.Render();
+				break;
+			case NAV__MENU_STATUS:
+				m_statusMenu.Render();
 				break;
 			case NAV__MENU_PERSISTENT_PLAY:
 				m_persistentPlayMenu.Render();

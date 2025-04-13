@@ -14,6 +14,7 @@ struct movesetInfo
 	std::string name;
 	std::wstring wname;
 	FasterStringComp origin;
+	int32_t characterId;
 	std::string target_character;
 	std::string original_character;
 	std::string version_string;
@@ -35,7 +36,7 @@ struct movesetInfo
 	bool modified; // Was modified with the editor
 	bool editable;
 	bool onlineImportable; // Moveset over a certain size can't be used online
-
+	
 	bool is_valid;
 };
 
@@ -56,6 +57,8 @@ private:
 public:
 	// Contains the list of movesets found in the extraction directory
 	std::vector<movesetInfo*> extractedMovesets;
+	// Contains a list of new movesets that need to be loaded into shared memory
+	std::vector<movesetInfo*> newMovesets;
 
 	~LocalStorage();
 

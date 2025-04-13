@@ -10,7 +10,7 @@
 
 void GameInteraction::SetTargetProcess(const GameInfo* gameInfo)
 {
-	if (IsBusy()) {
+	if (process.IsAttached() && IsBusy()) {
 		return;
 	}
 
@@ -19,6 +19,7 @@ void GameInteraction::SetTargetProcess(const GameInfo* gameInfo)
 	currentGameProcess = std::string(gameInfo->processName);
 
 	if (process.IsAttached()) {
+		DEBUG_LOG("GameInteraction::SetTargetProcess() - detaching previously attached process\n");
 		PreProcessDetach();
 		process.Detach();
 		OnProcessDetach();

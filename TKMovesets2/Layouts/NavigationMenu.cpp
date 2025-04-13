@@ -13,13 +13,14 @@ const NavMenuBtn cg_moveset_btns[] = {
 };
 
 const NavMenuBtn cg_play_btns[] = {
-	{NAV__MENU_PERSISTENT_PLAY, "navmenu.persistent_play"},
-	{NAV__MENU_ONLINE_PLAY, "navmenu.online"},
+	{NAV__MENU_STATUS, "navmenu.status"},
+	//{NAV__MENU_PERSISTENT_PLAY, "navmenu.persistent_play"},
+	//{NAV__MENU_ONLINE_PLAY, "navmenu.online"},
 };
 
 const NavMenuBtn cg_tools_btns[] = {
 	{NAV__MENU_EDITION, "navmenu.moveset_edit"},
-	//{NAV__MENU_CAMERA, "navmenu.camera"},
+	{NAV__MENU_CAMERA, "navmenu.camera"},
 };
 
 const NavMenuBtn cg_other_btns[] = {
@@ -46,14 +47,14 @@ void NavigationMenu::RenderBtnList(const NavMenuBtn* c_btns, size_t count, float
 
 void NavigationMenu::Render(float width, bool navigationLocked)
 {
-	ImGui::SeparatorText(_("navmenu.category_moveset"));
-	RenderBtnList(cg_moveset_btns, _countof(cg_moveset_btns), width, navigationLocked);
+	//ImGui::SeparatorText(_("navmenu.category_moveset"));
+	//RenderBtnList(cg_moveset_btns, _countof(cg_moveset_btns), width, navigationLocked);
 
 	ImGui::SeparatorText(_("navmenu.category_play"));
 	RenderBtnList(cg_play_btns, _countof(cg_play_btns), width, navigationLocked);
 
-	ImGui::SeparatorText(_("navmenu.category_tools"));
-	RenderBtnList(cg_tools_btns, _countof(cg_tools_btns), width, navigationLocked);
+	//ImGui::SeparatorText(_("navmenu.category_tools"));
+	//RenderBtnList(cg_tools_btns, _countof(cg_tools_btns), width, navigationLocked);
 
 	ImGui::SeparatorText(_("navmenu.category_other"));
 	RenderBtnList(cg_other_btns, _countof(cg_other_btns), width, navigationLocked);

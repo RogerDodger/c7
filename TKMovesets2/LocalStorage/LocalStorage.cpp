@@ -1,3 +1,5 @@
+#pragma once
+
 #include <filesystem>
 #include <fstream>
 #include <sys/stat.h>
@@ -62,6 +64,7 @@ static movesetInfo* fetchMovesetInformations(const std::wstring& filename)
 				.name = Helpers::getMovesetNameFromFilename(filename),
 				.wname = Helpers::getMovesetWNameFromFilename(filename),
 				.origin = movesetInfos.origin,
+				.characterId = (int32_t)movesetInfos.characterId,
 				.target_character = movesetInfos.target_character,
 				.original_character = movesetInfos.GetOrigCharacterName(),
 				.version_string = std::string(movesetInfos.version_string),
@@ -178,6 +181,7 @@ void LocalStorage::ReloadMovesetList()
 						.filename = filename,
 						.name = Helpers::getMovesetNameFromFilename(filename),
 						.origin = std::string("INVALID"),
+						.characterId = -1,
 						.target_character = "",
 						.original_character = "",
 						.date = 0,
@@ -187,6 +191,9 @@ void LocalStorage::ReloadMovesetList()
 						.editable = false,
 						.is_valid = false
 					};
+				}
+				else {
+					newMovesets.push_back(moveset);
 				}
 
 				extractedMovesets.push_back(moveset);

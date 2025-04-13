@@ -42,6 +42,8 @@ public:
 	bool isInjected = false;
 	// True if we are locked in
 	bool lockedIn = false;
+	// True if we were just detached
+	bool wasDetached = false;
 	// moveset loader mode (persistent / online)
 	MovesetLoaderMode_ movesetLoaderMode = MovesetLoaderMode_Invalid;
 	// If true, will synchronise the .lockedIn variable to the shared memory every RunningUpdate()

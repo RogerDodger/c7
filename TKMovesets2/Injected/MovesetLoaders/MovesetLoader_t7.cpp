@@ -1,6 +1,7 @@
 #include <stdarg.h>
 
 #include "MovesetLoader_t7.hpp"
+#include "Extractor.hpp"
 #include "Helpers.hpp"
 #include "steamHelper.hpp"
 
@@ -90,23 +91,19 @@ static void ApplyStaticMotas(void* player, MovesetInfo* newMoveset)
 
 // -- Other helpers -- //
 
-static void InitializeCustomMoveset(SharedMemT7_Player& player)
+static void InitializeCustomMoveset(SharedMemT7_Char& charData)
 {
-	MovesetInfo* moveset = (MovesetInfo*)player.custom_moveset_addr;
+	MovesetInfo* moveset = (MovesetInfo*)charData.addr;
 
 	// Mark missing motas with bitflag
 	for (unsigned int i = 0; i < _countof(moveset->motas.motas); ++i)
 	{
 		if ((uint64_t)moveset->motas.motas[i] == MOVESET_ADDR_MISSING) {
-			player.SetMotaMissing(i);
+			charData.SetMotaMissing(i);
 		}
 	}
 
-	// .previous_character_id is used to determine which character id we will have to replace in requirements
-	// Ensure it is at the right value for the first ApplyNewMoveset()
-	player.previous_character_id = player.moveset_character_id;
-
-	player.is_initialized = true;
+	charData.is_initialized = true;
 }
 
 static unsigned int GetLobbySelfMemberId()
@@ -143,7 +140,6 @@ static unsigned int GetLobbyOpponentMemberId()
 	return 0;
 }
 
-
 // -- Hook functions --
 
 namespace T7Hooks
@@ -156,80 +152,34 @@ namespace T7Hooks
 		auto retVal = g_loader->CastTrampoline<T7Functions::ApplyNewMoveset>("TK__ApplyNewMoveset")(player, newMoveset);
 		DEBUG_LOG("(orig moveset initialized\n");
 
-		if (!g_loader->sharedMemPtr->locked_in) {
+		// Obtain custom moveset by this player's char_id
+		uint32_t char_id = *((char*)player + g_loader->addresses.GetValue("chara_id_offset"));
+		if (char_id < 0 || char_id >= sizeof(g_loader->sharedMemPtr->chars)) {
 			return retVal;
 		}
 
-		DEBUG_LOG("(checking if online moveset useable...\n");
-		// If we're in online play, don't load movesets if syncing isn't achieved
-		if (g_loader->sharedMemPtr->OnlinePlayMovesetsNotUseable()) {
-			DEBUG_LOG("ApplyNewMoveset: Online mode is on, but status is not ready. (%u)\n", g_loader->sharedMemPtr->moveset_sync_status);
-			g_loader->DiscardIncomingPackets();
-			auto incomingMoveset = g_loader->incoming_moveset.data;
-			g_loader->incoming_moveset.data = 0;
-			delete[] incomingMoveset;
-			return retVal;
-		}
-		g_loader->DiscardIncomingPackets();
-
-		DEBUG_LOG("(checking if local player p1...\n");
-		// Determine if we, the user, are the main player or if we are p2
-		bool isLocalP1 = IsLocalPlayerP1();
-
-		// Determine the player index of the player argument, and correct it with isLocalP1
-		auto playerIndex = GetPlayerIdFromAddress(player) ^ (!isLocalP1);
-		DEBUG_LOG("Corrected player index: %d. Is Local P1: %d\n", playerIndex, isLocalP1);
-		if (playerIndex < 0) {
-			return retVal;
-		}
-
-		// Obtain custom player data to apply
-		auto& playerData = g_loader->sharedMemPtr->players[playerIndex];
-		MovesetInfo* customMoveset = (MovesetInfo*)playerData.custom_moveset_addr;
+		auto& charData = g_loader->sharedMemPtr->chars[char_id];
+		MovesetInfo* customMoveset = (MovesetInfo*)charData.addr;
 		if (!customMoveset) {
+			DEBUG_LOG("No custom moveset for char_id %d\n", char_id);
 			return retVal;
 		}
-		DEBUG_LOG("Custom moveset %p\n", customMoveset);
 
-		if (!playerData.is_initialized) {
-			InitializeCustomMoveset(playerData);
+		DEBUG_LOG("Custom moveset for char_id %d: %p\n", char_id, charData.addr);
+
+		if (!charData.is_initialized) {
+			InitializeCustomMoveset(charData);
 		}
 
 		// Copy missing MOTA offsets from newMoveset
 		for (unsigned int i = 0; i < _countof(customMoveset->motas.motas); ++i)
 		{
-			if (playerData.isMotaMissing(i)) {
+			if (charData.isMotaMissing(i)) {
 				DEBUG_LOG("Missing mota %d, getting it from game's moveset\n", i);
 				customMoveset->motas.motas[i] = newMoveset->motas.motas[i];
 			}
 		}
 
-		{
-			// Fix moves relying on character IDs
-
-			// Find out which character ID we will be replacing and with which
-			int new_char_id = *(int*)((char*)player + 0xD8);
-			int char_id_to_replace = playerData.previous_character_id;
-
-			DEBUG_LOG("Char ID that we will be replacing: %d. Replacement: %d\n", char_id_to_replace, new_char_id);
-
-			// Get the 'Is character ID' condition
-			// todo: there are more than one condition that use character IDs. Might be relevant to also work on those?
-			int c_characterIdCondition = (int)g_loader->addresses.GetValue("character_id_condition");
-
-			// Loop through every requirement, replace character IDs in relevant requirements' values
-			for (auto& requirement : StructIterator<Requirement>(customMoveset->table.requirement, customMoveset->table.requirementCount))
-			{
-				if (requirement.condition == c_characterIdCondition) {
-					requirement.param_unsigned = (requirement.param_unsigned == char_id_to_replace) ? new_char_id : (new_char_id + 1);
-				}
-			}
-
-			// Mark which character ID we will have to replace on the next ApplyNewMoveset() call
-			playerData.previous_character_id = new_char_id;
-		}
-
-		
 		{
 			// Apply custom moveset to our character*
 			DEBUG_LOG("Applying custom moveset to character...\n");

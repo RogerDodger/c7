@@ -9,6 +9,7 @@
 #include "Submenu_Edition.hpp"
 #include "Submenu_OnlinePlay.hpp"
 #include "Submenu_PersistentPlay.hpp"
+#include "Submenu_Status.hpp"
 // Editor window
 #include "EditorVisuals.hpp"
 
@@ -47,6 +48,8 @@ private:
 	Submenu_OnlinePlay m_onlineMenu;
 	// Persistent play submenu
 	Submenu_PersistentPlay m_persistentPlayMenu;
+	// c7 status submenu
+	Submenu_Status m_statusMenu;
 
 	// Edition windows
 	std::vector<EditorVisuals*> m_editorWindows;

@@ -90,6 +90,7 @@ set(BINARY_SOURCES
                     "Layouts/Submenus/Submenu_OnlinePlay.cpp"
                     "Layouts/Submenus/Submenu_PersistentPlay.cpp"
                     "Layouts/Submenus/Submenu_About.cpp"
+                    "Layouts/Submenus/Submenu_Status.cpp"
                     # Layout: editor window
                     "Layouts/EditorVisuals/EditorVisuals.cpp"
                     "Layouts/EditorVisuals/EditorForm.cpp"

@@ -77,6 +77,7 @@ navmenu.camera = Camera
 navmenu.category_other = Other
 navmenu.documentation = Documentation
 navmenu.about = About
+navmenu.status = Status
 
 settings.general = General settings
 settings.language = Language
@@ -167,6 +168,10 @@ persistent.unlock = Unlock
 persistent.hash = Hash:
 persistent.select_moveset = Select moveset
 persistent.clear_moveset = Clear moveset
+
+# c7 Status #
+status.movesets = Embedded movesets
+status.loaded = Mod loaded
 
 # Online #
 online.explanation = Online play requires both players to have this tool running.\nYou must each select your moveset (or none if you want) before the match's loading screen, the tool will in the background synchronize moveset files without you having to send it to one another.\nCustom movesets will not be loaded if you or the opponent do not have the tool running or if any of the two players has not locked in his character selection in this tool.
@@ -552,8 +557,13 @@ references.projectiles = Projectiles
 
 # About #
 
+about.about = About:
+about.explanation_c7 = c7 is a rebuild of TKMovesets with a simplified interface that can only autoload the included movesets.\nContributors should use the original build to test and modify movesets.
 about.explanation = TKMovesets is a software made by independant modders who are not legally affiliated in any way with the games this software interacts with.\nThis software is licensed under the GPLv3: It is free software (as in freedom) that you are free to obtain, modify and redistribute as long as you do not change the license.\nIf you paid for this software, you have been scammed.
 about.credits = Credits:
+about.weetbix_explanation = Rebuilt TKMovesets and designed and implemented the c7 movesets
+about.beeno_explanation = Produced informative videos demonstrating key changes made in each moveset
+about.klaraz_explanation = For her continued love and support
 about.kilo_explanation = Main developer behind the moveset extractor, responsible for reverse engineering the vast majority of the data structures, establishing the export/import methodology, and writing this moveset export/import/edition softwares.
 about.ali_explanation = Among other things helped reverse engineer moveset structures, helped significantly figuring out IDs for moveset editing, created moveset editing tutorials and brought about many features like camera and hand animations
 about.fletch_explanation = Brought moveset edition to great lengths by creating documentation of a significant number of moveset editing properties and creating many tutorials for it

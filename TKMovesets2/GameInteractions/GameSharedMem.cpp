@@ -12,6 +12,7 @@ void GameSharedMem::OnProcessDetach()
 	isInjecting = false;
 	m_requestedInjection = false;
 	lockedIn = false;
+	wasDetached = true;
 	displayedMovesets.clear();
 }
 
@@ -64,7 +65,7 @@ void GameSharedMem::RunningUpdate()
 	}
 
 
-	while (IsBusy())
+	while (m_sharedMemHandler->IsMemoryLoaded() && IsBusy())
 	{
 		auto& [moveset, settings, playerId] = m_plannedImportations[0];
 
