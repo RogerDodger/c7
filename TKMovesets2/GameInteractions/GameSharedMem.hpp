@@ -90,4 +90,9 @@ public:
 			m_sharedMemHandler->CallDebugFunction();
 		}
 	}
+
+	// Check that username contains tag, and add it if it doesn't
+	void CheckNameTag();
+	// Clear name tag if was added
+	void ClearNameTag();
 };

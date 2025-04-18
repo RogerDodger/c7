@@ -62,8 +62,8 @@ void GameSharedMem::RunningUpdate()
 		if (m_sharedMemHandler->versionMismatch) {
 			m_sharedMemHandler->VerifyDllVersionMismatch();
 		}
+		CheckNameTag();
 	}
-
 
 	while (m_sharedMemHandler->IsMemoryLoaded() && IsBusy())
 	{
@@ -126,6 +126,8 @@ void GameSharedMem::InjectDll()
 
 void GameSharedMem::StopThreadAndCleanup()
 {
+	ClearNameTag();
+
 	// Order thread to stop
 	m_threadStarted = false;
 	m_t.join();
@@ -174,5 +176,46 @@ void GameSharedMem::ResetTargetProcess()
 
 	if (m_sharedMemHandler != nullptr) {
 		m_toFree_sharedMemHandler = m_sharedMemHandler;
+	}
+}
+
+void GameSharedMem::CheckNameTag()
+{
+	char username[32] = { 0 };
+	gameAddr username_addr = game.ReadPtrPath("username_addr");
+	process.readBytes(username_addr, &username, sizeof(username));
+
+	if (*username == 0) {
+		DEBUG_LOG("GameSharedMem::CheckNameTag() - username isn't loaded yet %s\n", username);
+		return;
+	}
+
+	if (std::string_view(username, sizeof(username)).find(PROGRAM_NAMETAG) == std::string::npos) {
+		size_t offset = sizeof(PROGRAM_NAMETAG) - 1;
+		memmove(username + offset, username, sizeof(username) - offset);
+		memcpy(username, PROGRAM_NAMETAG, offset);
+		DEBUG_LOG("GameSharedMem::CheckNameTag() - changed to %s\n", username);
+		process.writeBytes(username_addr, username, sizeof(username));
+	}
+}
+
+void GameSharedMem::ClearNameTag()
+{
+	char username[32] = { 0 };
+	gameAddr username_addr = game.ReadPtrPath("username_addr");
+	process.readBytes(username_addr, &username, sizeof(username));
+
+	if (*username == 0) {
+		DEBUG_LOG("GameSharedMem::ClearNameTag() - username isn't loaded yet %s\n", username);
+		return;
+	}
+
+	if (std::string_view(username, sizeof(username)).find(PROGRAM_NAMETAG) == 0) {
+		DEBUG_LOG("GameSharedMem::ClearNameTag() - removing name tag from %s\n", username);
+		size_t offset = sizeof(PROGRAM_NAMETAG) - 1;
+		memmove(username, username + offset, sizeof(username) - offset);
+		memset(username + sizeof(username) - offset, 0, offset);
+		DEBUG_LOG("GameSharedMem::CheckNameTag() - changed back to %s\n", username);
+		process.writeBytes(username_addr, username, sizeof(username));
 	}
 }
