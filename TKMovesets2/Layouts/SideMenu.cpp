@@ -404,13 +404,7 @@ void SideMenu::RenderChangelog()
 
 	// Controls
 	if (ImGui::Button(_("yes"))) {
-		if (DownloadProgramUpdate(&m_updateStatus, m_addresses, false)) {
-			*requestedUpdatePtr = true;
-		}
-		else {
-			m_updateFileInvalid = true;
-		}
-
+		m_updateFileInvalid = true;
 	}
 	ImGui::SameLine();
 	if (ImGui::Button(_("no")) || ImGui::IsKeyDown(ImGuiKey_Escape)) {
@@ -441,9 +435,6 @@ void SideMenu::Render(float width)
 
 	// Updating
 	ImGui::NewLine();
-	if (ImGuiExtra::RenderButtonEnabled(_("sidemenu.update"), !m_updateStatus.verifying, ImVec2(width, 0))) {
-		RequestCheckForUpdates();
-	}
 
 	if (m_updateStatus.verifying) {
 		ImGui::TextUnformatted(_("sidemenu.update_check"));
@@ -484,5 +475,18 @@ void SideMenu::Render(float width)
 	{
 		RenderSettingsMenu();
 		ImGui::EndPopup();
+	}
+}
+
+void SideMenu::SetAddrFile(GameAddressesFile* addresses)
+{
+	m_addresses = addresses;
+}
+
+void SideMenu::CleanupThread()
+{
+	if (m_updateStatus.verifiedOnce) {
+		m_updateStatus.thread.join();
+		m_updateStatus.verifiedOnce = false;
 	}
 }

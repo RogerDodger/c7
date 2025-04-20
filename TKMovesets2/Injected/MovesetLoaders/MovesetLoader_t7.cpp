@@ -154,7 +154,7 @@ namespace T7Hooks
 
 		// Obtain custom moveset by this player's char_id
 		uint32_t char_id = *((char*)player + g_loader->addresses.GetValue("chara_id_offset"));
-		if (char_id < 0 || char_id >= sizeof(g_loader->sharedMemPtr->chars)) {
+		if (char_id >= sizeof(g_loader->sharedMemPtr->chars)) {
 			return retVal;
 		}
 

@@ -323,17 +323,3 @@ void SideMenu::RequestCheckForUpdates()
 	m_updateStatus.thread = std::thread(&SideMenu::CheckForUpdates, this, !m_updateStatus.verifiedOnce);
 	m_updateStatus.verifiedOnce = true;
 }
-
-
-void SideMenu::SetAddrFile(GameAddressesFile* addresses)
-{
-	m_addresses = addresses;
-}
-
-void SideMenu::CleanupThread()
-{
-	if (m_updateStatus.verifiedOnce) {
-		m_updateStatus.thread.join();
-		m_updateStatus.verifiedOnce = false;
-	}
-}

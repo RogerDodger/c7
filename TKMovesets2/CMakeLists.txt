@@ -67,9 +67,6 @@ set(BINARY_SOURCES
                     "main/run_gui.cpp"
                     "main/arguments_handling.cpp"
 
-                    "Updater/UpdateApply.cpp"
-                    "Updater/UpdateCheck.cpp"
-
                     "GameInteractions/GameInteraction.cpp"
                     "GameInteractions/GameExtract.cpp"
                     "GameInteractions/GameImport.cpp"

@@ -43,16 +43,6 @@ int WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_  LP
 			std::filesystem::current_path(exe_directory);
 			DEBUG_LOG("Not in correct directory, setting current dir as: %S\n", exe_directory.wstring().c_str());
 		}
-
-		std::string update_file_name = "" UPDATE_TMP_FILENAME ".exe";
-		if (basename == update_file_name) {
-			// Copy self .exe into TKMovesets.exe
-			ApplyUpdate(update_file_name);
-			return MAIN_ERR_NO_ERR;
-		}
-		else if (Helpers::fileExists(update_file_name.c_str())) {
-			CleanupUpdateFiles(update_file_name);
-		}
 	}
 
 	if (handle_arguments()) {

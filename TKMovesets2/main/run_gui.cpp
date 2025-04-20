@@ -14,9 +14,6 @@
 
 #include "constants.h"
 
-// From UpdateApply.cpp
-void StartProcess(const std::string& file);
-
 // -- Static helpers -- //
 
 static void glfw_error_callback(int error, const char* description)
@@ -237,11 +234,6 @@ void run_gui()
 			if (io.DeltaTime < (1.0f / MAX_FPS)) {
 				Sleep((DWORD)(((1.0f / MAX_FPS) - io.DeltaTime) * 1000));
 			}
-		}
-
-		if (program.requestedUpdate) {
-			program.sideMenu.CleanupThread();
-			StartProcess(UPDATE_TMP_FILENAME ".exe");
 		}
 	}
 
