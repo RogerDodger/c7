@@ -335,7 +335,3 @@ target_link_libraries(TKMovesetLoader PRIVATE liblzma::liblzma)
 # Hook (Polyhook)
 find_package(PolyHook_2 CONFIG REQUIRED)
 target_link_libraries(TKMovesetLoader PRIVATE PolyHook_2::PolyHook_2)
-
-# HTTP requests
-find_package(unofficial-curlpp CONFIG REQUIRED)
-target_link_libraries(TKMovesets2 PRIVATE unofficial::curlpp::curlpp)

@@ -1,10 +1,10 @@
 #include <fstream>
 #include <format>
 #include <sstream>
-#include <curlpp/cURLpp.hpp>
-#include <curlpp/Easy.hpp>
-#include <curlpp/Options.hpp>
-#include <curlpp/Infos.hpp>
+//#include <curlpp/cURLpp.hpp>
+//#include <curlpp/Easy.hpp>
+//#include <curlpp/Options.hpp>
+//#include <curlpp/Infos.hpp>
 #include <regex>
 
 #include "Games.hpp"
@@ -20,38 +20,40 @@
 static bool downloadFile(const char* url, const char* filepath)
 {
 	// Ensure the INTERFACE_DATA_DIR folder exists
-	CreateDirectoryA(INTERFACE_DATA_DIR, nullptr);
+	//CreateDirectoryA(INTERFACE_DATA_DIR, nullptr);
 
-	DEBUG_LOG("\tdownloadFile('%s', '%s')\n", url, filepath);
+	//DEBUG_LOG("\tdownloadFile('%s', '%s')\n", url, filepath);
 
-	std::list<std::string> headers;
-	headers.push_back("Host: raw.githubusercontent.com");
-	headers.push_back("Accept: */*");
-	headers.push_back("User-Agent: curl/7.83.1");
+	//std::list<std::string> headers;
+	//headers.push_back("Host: raw.githubusercontent.com");
+	//headers.push_back("Accept: */*");
+	//headers.push_back("User-Agent: curl/7.83.1");
 
-	curlpp::Cleanup myCleanup;
-	curlpp::Easy myRequest;
-	myRequest.setOpt(new curlpp::options::FollowLocation(true));
-	myRequest.setOpt(new curlpp::options::Url(url));
-	myRequest.setOpt(new curlpp::options::HttpHeader(headers));
-	myRequest.setOpt(new curlpp::options::Timeout(HTTP_REQUEST_TIMEOUT));
+	//curlpp::Cleanup myCleanup;
+	//curlpp::Easy myRequest;
+	//myRequest.setOpt(new curlpp::options::FollowLocation(true));
+	//myRequest.setOpt(new curlpp::options::Url(url));
+	//myRequest.setOpt(new curlpp::options::HttpHeader(headers));
+	//myRequest.setOpt(new curlpp::options::Timeout(HTTP_REQUEST_TIMEOUT));
 
-	try {
-		std::ofstream ofs(filepath, std::ios::out | std::ios::trunc | std::ios::binary);
-		curlpp::options::WriteStream ws(&ofs);
-		myRequest.setOpt(ws);
-		myRequest.perform();
-	}
-	catch (curlpp::LibcurlRuntimeError&) {
-		DEBUG_ERR("CURL ERROR");
-		return false;
-	}
-	catch (curlpp::LogicError&) {
-		DEBUG_ERR("CURL ERROR");
-		return false;
-	}
+	//try {
+	//	std::ofstream ofs(filepath, std::ios::out | std::ios::trunc | std::ios::binary);
+	//	curlpp::options::WriteStream ws(&ofs);
+	//	myRequest.setOpt(ws);
+	//	myRequest.perform();
+	//}
+	//catch (curlpp::LibcurlRuntimeError&) {
+	//	DEBUG_ERR("CURL ERROR");
+	//	return false;
+	//}
+	//catch (curlpp::LogicError&) {
+	//	DEBUG_ERR("CURL ERROR");
+	//	return false;
+	//}
 
-	return true;
+	//return true;
+	DEBUG_ERR("EditorLabel.cpp downloadFile() CURL REMOVED");
+	return false;
 }
 
 
@@ -134,41 +136,43 @@ void EditorLabel::DownloadFromWebsite()
 
 	DEBUG_LOG("EditorLabel::DownloadFromWebsite() - Querying '%s'\n", interfaceResourcesUrl.c_str());
 
-	// Prepare the HTTP request
-	std::list<std::string> headers;
-	headers.push_back("Host: api.github.com");
-	headers.push_back("Accept: */*");
-	headers.push_back("User-Agent: curl/7.83.1");
-
-	curlpp::Cleanup myCleanup;
-	curlpp::Easy myRequest;
-	myRequest.setOpt(new curlpp::options::Url(interfaceResourcesUrl));
-	myRequest.setOpt(new curlpp::options::HttpHeader(headers));
-	myRequest.setOpt(new curlpp::options::Timeout(HTTP_REQUEST_TIMEOUT));
-	
-	// Send the request, store to fileList
+	//// Prepare the HTTP request
+	//std::list<std::string> headers;
+	//headers.push_back("Host: api.github.com");
+	//headers.push_back("Accept: */*");
+	//headers.push_back("User-Agent: curl/7.83.1");
+	//
+	//curlpp::Cleanup myCleanup;
+	//curlpp::Easy myRequest;
+	//myRequest.setOpt(new curlpp::options::Url(interfaceResourcesUrl));
+	//myRequest.setOpt(new curlpp::options::HttpHeader(headers));
+	//myRequest.setOpt(new curlpp::options::Timeout(HTTP_REQUEST_TIMEOUT));
+	//
+	//// Send the request, store to fileList
 	std::string fileList;
-	{
-		std::stringstream os;
-		try {
-			curlpp::options::WriteStream ws(&os);
-			myRequest.setOpt(ws);
-			myRequest.perform();
-			fileList = os.str();
-		}
-		catch (curlpp::LibcurlRuntimeError&) {
-			errored = true;
-			ongoingQuery = false;
-			DEBUG_ERR("CURL ERROR");
-			return;
-		}
-		catch (curlpp::LogicError&) {
-			errored = true;
-			ongoingQuery = false;
-			DEBUG_ERR("CURL ERROR");
-			return;
-		}
-	}
+	//{
+	//	std::stringstream os;
+	//	try {
+	//		curlpp::options::WriteStream ws(&os);
+	//		myRequest.setOpt(ws);
+	//		myRequest.perform();
+	//		fileList = os.str();
+	//	}
+	//	catch (curlpp::LibcurlRuntimeError&) {
+	//		errored = true;
+	//		ongoingQuery = false;
+	//		DEBUG_ERR("CURL ERROR");
+	//		return;
+	//	}
+	//	catch (curlpp::LogicError&) {
+	//		errored = true;
+	//		ongoingQuery = false;
+	//		DEBUG_ERR("CURL ERROR");
+	//		return;
+	//	}
+	//}
+	DEBUG_ERR("EditorLabel.cpp DownloadFromWebsite() CURL REMOVED");
+	return;
 
 	// We will try to download any file with these specific prefixes
 	std::vector<std::string> prefixToSearchList = {
