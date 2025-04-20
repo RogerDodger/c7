@@ -118,12 +118,6 @@ MainWindow::MainWindow()
 // Actual rendering function
 void MainWindow::Update()
 {
-	// Inject into running process
-	if (m_sharedMem.IsAttached() && m_sharedMem.process.CheckRunning()) {
-		m_sharedMem.InjectDll();
-		m_sharedMem.SetSharedMemDestroyBehaviour(true);
-	}
-
 	// Autoload new movesets into shared memory
 	if (m_sharedMem.isMemoryLoaded) {
 		while (m_storage.newMovesets.size() > 0) {

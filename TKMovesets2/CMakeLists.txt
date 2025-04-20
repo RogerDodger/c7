@@ -225,7 +225,6 @@ set(GAMESPECIFIC_SOURCES
 set(MOVESETLOADER_SOURCES
     "Injected/MovesetLoader.cpp"
 
-
     "Injected/InjectionUtils.cpp"
     "Injected/steamHelper.cpp"
 
@@ -275,21 +274,8 @@ if (${CMAKE_TKM_BUILD_TYPE} MATCHES "Debug")
 endif()
 
 
-## Embedded TKMovesetLoader for main binary ##
-if (NOT ${CMAKE_TKM_BUILD_TYPE} MATCHES "Debug")
-    set(MOVESET_LOADER_EMBEDDED "${CMAKE_CURRENT_BINARY_DIR}/../TKMovesetLoader.c")
-    set(embed_file_exe_path "${CMAKE_CURRENT_BINARY_DIR}/FileEmbedder.exe")
-    # Convert moveset loader into .c that the main program will build
-    add_custom_command(OUTPUT ${MOVESET_LOADER_EMBEDDED}
-        COMMAND "${embed_file_exe_path}" "${CMAKE_CURRENT_BINARY_DIR}/TKMovesetLoader.dll" "TKMovesetLoader"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/.."
-        COMMENT "Converting moveset loader data into .c ..."
-        DEPENDS TKMovesetLoader FileEmbedder
-    )
-else()
-    # Don't embed if in debug mode
-    set(MOVESET_LOADER_EMBEDDED "")
-endif()
+## Don't embed TKMovesetLoader into main binary ##
+set(MOVESET_LOADER_EMBEDDED "")
 
 # Build lib containing per-game Import/Export movesets functions
 add_library(GameSpecific STATIC ${GAMESPECIFIC_SOURCES} ${EMBEDDED_RESOURCES})

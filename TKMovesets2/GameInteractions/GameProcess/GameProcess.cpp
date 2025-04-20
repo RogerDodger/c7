@@ -119,6 +119,9 @@ GameProcessErrcode_ GameProcess::AttachToNamedProcess(const char* processName, D
 		return GameProcessErrcode_PROC_NOT_FOUND;
 	}
 	else {
+		// Give the game some time to load
+		std::this_thread::sleep_for(std::chrono::milliseconds(2500));
+
 		m_processHandle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | processExtraFlags, FALSE, pid);
 		if (m_processHandle != nullptr)
 		{

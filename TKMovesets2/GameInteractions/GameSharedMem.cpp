@@ -14,15 +14,34 @@ void GameSharedMem::OnProcessDetach()
 	lockedIn = false;
 	wasDetached = true;
 	displayedMovesets.clear();
+
+	// Was in GameSharedMem::InstantiateFactory(), see comment there
+	m_toFree_importer = m_importer;
+	m_toFree_sharedMemHandler = m_sharedMemHandler;
 }
 
 void GameSharedMem::InstantiateFactory()
 {
-	// Delete old instances if needed
-	m_toFree_importer = m_importer;
-	m_toFree_sharedMemHandler = m_sharedMemHandler;
-
+	// Commented code crashes Tekken 7 for some reason
+	//
+	// Specifically, if the DLL was injected into Tekken 7, and then Tekken 7 is
+	// closed and re-opened, Tekken 7 will crash if this is uncommented.
+	// It will not crash on the next load.
+	//
+	// // Delete old instances if needed
+	// m_toFree_importer = m_importer;
+	// m_toFree_sharedMemHandler = m_sharedMemHandler;
+	//
+	// It doesn't matter if we do it right away either, this has same effect:
+	//
+	// delete m_importer;
+	// delete m_sharedMemHandler;
+	//
+	// Without this, there's no crash, but the DLL can't re-inject either
+	// Solution appears to be doing this cleanup in OnProcessDetach() instead
+	// Not clear why this wasn't how it worked already
 	game.SetCurrentGame(currentGame);
+
 	// Every game has its own subtleties so we use polymorphism to manage that
 	m_importer = currentGame->importer == nullptr ? nullptr : Games::FactoryGetImporter(currentGame, process, game);
 	m_sharedMemHandler = Games::FactoryGetOnline(currentGame, process, game);
@@ -62,8 +81,9 @@ void GameSharedMem::RunningUpdate()
 		if (m_sharedMemHandler->versionMismatch) {
 			m_sharedMemHandler->VerifyDllVersionMismatch();
 		}
-		CheckNameTag();
 	}
+
+	CheckNameTag();
 
 	while (m_sharedMemHandler->IsMemoryLoaded() && IsBusy())
 	{
@@ -186,7 +206,6 @@ void GameSharedMem::CheckNameTag()
 	process.readBytes(username_addr, &username, sizeof(username));
 
 	if (*username == 0) {
-		DEBUG_LOG("GameSharedMem::CheckNameTag() - username isn't loaded yet %s\n", username);
 		return;
 	}
 
@@ -196,6 +215,10 @@ void GameSharedMem::CheckNameTag()
 		memcpy(username, PROGRAM_NAMETAG, offset);
 		DEBUG_LOG("GameSharedMem::CheckNameTag() - changed to %s\n", username);
 		process.writeBytes(username_addr, username, sizeof(username));
+
+		DEBUG_LOG("GameSharedMem::CheckNameTag() - injecting DLL\n");
+		m_sharedMemHandler->InjectDllAndWaitEnd();
+		SetSharedMemDestroyBehaviour(true);
 	}
 }
 
@@ -206,7 +229,6 @@ void GameSharedMem::ClearNameTag()
 	process.readBytes(username_addr, &username, sizeof(username));
 
 	if (*username == 0) {
-		DEBUG_LOG("GameSharedMem::ClearNameTag() - username isn't loaded yet %s\n", username);
 		return;
 	}
 

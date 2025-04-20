@@ -328,10 +328,6 @@ void SideMenu::RequestCheckForUpdates()
 void SideMenu::SetAddrFile(GameAddressesFile* addresses)
 {
 	m_addresses = addresses;
-#ifndef BUILD_TYPE_DEBUG
-	// Automatically check for updates in release mode
-	RequestCheckForUpdates();
-#endif
 }
 
 void SideMenu::CleanupThread()
