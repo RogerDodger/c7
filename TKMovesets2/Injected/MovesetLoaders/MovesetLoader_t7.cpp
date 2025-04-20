@@ -146,11 +146,33 @@ namespace T7Hooks
 {
 	uint64_t ApplyNewMoveset(void* player, MovesetInfo* newMoveset)
 	{
-		DEBUG_LOG("\n- ApplyNewMoveset on player %llx, moveset is %llx -\n", (uint64_t)player, (uint64_t)newMoveset);
+		auto player_id = GetPlayerIdFromAddress(player);
+		DEBUG_LOG("\n- ApplyNewMoveset on player %llx, moveset is %llx, idx %d -\n", (uint64_t)player, (uint64_t)newMoveset, player_id);
 
 		// First, call the original function to let the game initialize all the important values in their new moveset
 		auto retVal = g_loader->CastTrampoline<T7Functions::ApplyNewMoveset>("TK__ApplyNewMoveset")(player, newMoveset);
-		DEBUG_LOG("(orig moveset initialized\n");
+		DEBUG_LOG("(orig moveset initialized, retVal %d)\n", retVal);
+
+		// If this isn't P1 or P2, stop here
+		// This function is called on 5 players on each load
+		//
+		// 1st call is for P1, player_id 0
+		// 2nd call is for P2, player_id 1
+		// 3rd call has player_id -1 and char_id 75 (Mokujin)
+		// 4th call has player_id 4
+		// 5th call has player_id 5
+		//
+		// For the 4th and 5th call, newMoveset is from P1 and P2's movesets in the previous game respectively
+		// These calls, because they come later, would mess up the "missing" motas on the custom moveset
+		// For example, if Miguel was on P2 last game, and now Kazumi is on P2
+		// Kazumi would end up with Miguel's face and anim motas if we continued
+		// Since these are phantom players anyway, we just return here to avoid this bug
+		//
+		// Ali speculates that the player_id 4 and 5 may be a holdover from Tag 2
+		// where each game has 4 loaded characters
+		if (player_id != 0 && player_id != 1) {
+			return retVal;
+		}
 
 		// Obtain custom moveset by this player's char_id
 		uint32_t char_id = *((char*)player + g_loader->addresses.GetValue("chara_id_offset"));
@@ -164,8 +186,6 @@ namespace T7Hooks
 			DEBUG_LOG("No custom moveset for char_id %d\n", char_id);
 			return retVal;
 		}
-
-		DEBUG_LOG("Custom moveset for char_id %d: %p\n", char_id, charData.addr);
 
 		if (!charData.is_initialized) {
 			InitializeCustomMoveset(charData);
