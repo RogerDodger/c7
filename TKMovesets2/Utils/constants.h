@@ -10,8 +10,8 @@
 
 # define PROGRAM_FILENAME        "TKMovesets2.exe"
 # define PROGRAM_TITLE           "c7"
-# define PROGRAM_VERSION         "1.0.0.0.1"
-# define PROGRAM_NAMETAG         "[c7.v1-beta2] "
+# define PROGRAM_VERSION         "1.0.0.0.3"
+# define PROGRAM_NAMETAG         "[c7.v1] "
 # define PROGRAM_WIN_WIDTH       1280
 # define PROGRAM_WIN_HEIGHT      720
 # define PROGRAM_DEFAULT_LOCALE  "en-US"
