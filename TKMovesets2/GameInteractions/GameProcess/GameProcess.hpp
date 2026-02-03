@@ -89,6 +89,8 @@ public:
 	moduleEntry mainModule;
 	// List of allocated blocks within the game's memory
 	std::vector<std::pair<gameAddr, uint64_t>> allocatedMemory;
+	// Addresses to skip when freeing (e.g., active movesets still in use)
+	std::vector<gameAddr> doNotFreeAddresses;
 	// Base address. Every read & write will be done on base + addr.
 	//gameAddr baseAddress{ (gameAddr)0x0 };
 
@@ -98,6 +100,8 @@ public:
 	bool Attach(const char* processName, DWORD processExtraFlags);
 	// Detach from the game,
 	void Detach();
+	// Add an address that should not be freed on detach (e.g., active moveset)
+	void AddDoNotFreeAddress(gameAddr addr);
 	// Returns true if .status = PROC_NOT_ATTACHED. Use CheckRunning() for an actual proper check.
 	bool IsAttached() const;
 	// Checks if pid still used by process & attempts a read. Updates .status & returns false if it fails.

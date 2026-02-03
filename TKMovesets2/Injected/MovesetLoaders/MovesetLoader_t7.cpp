@@ -204,6 +204,10 @@ namespace T7Hooks
 		}
 
 		{
+			// Track active custom moveset address in shared memory (so main app won't free it on shutdown)
+			g_loader->sharedMemPtr->activeCustomMovesetAddr[player_id] = (uint64_t)customMoveset;
+			DEBUG_LOG("Tracked active custom moveset %llx for player %d\n", (uint64_t)customMoveset, player_id);
+
 			// Apply custom moveset to our character*
 			DEBUG_LOG("Applying custom moveset to character...\n");
 			auto addr = (char*)player + g_loader->addresses.GetValue("motbin_offset");

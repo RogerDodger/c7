@@ -67,4 +67,6 @@ struct SharedMemT7 : SharedMemBase
 	SharedMemT7_Extraprop propToPlay;
 	// List of custom movesets, one per character_id
 	SharedMemT7_Char chars[60];
+	// Active custom moveset addresses currently in use by players (do not free on shutdown)
+	uint64_t activeCustomMovesetAddr[2] = {0, 0};
 };

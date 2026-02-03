@@ -4,6 +4,25 @@ OnlineT7::~OnlineT7()
 {
     if (resetMemOnDestroy && m_sharedMemPtr && m_process.CheckRunning()) {
         m_sharedMemPtr->locked_in = false;
+
+        // HACK: Don't free custom movesets that are currently in use by players.
+        // When the mod closes mid-match, the game is still using these movesets.
+        // Freeing them would crash the game. Instead, we let them leak until the
+        // game closes (when the OS reclaims all memory anyway).
+        // 
+        // Ideally we could free these after the match is over, but that would require
+        // leaving at least one hook lying around.
+        // 
+        // Other option is reloading the original moveset before free'ing everything,
+        // but I couldn't figure out how to do this without getting crashes,
+        // and may not be desirable from a UX perspective anyway.
+        for (int i = 0; i < 2; i++) {
+            uint64_t activeAddr = m_sharedMemPtr->activeCustomMovesetAddr[i];
+            if (activeAddr != 0) {
+                DEBUG_LOG("Active custom moveset for player %d: %llx\n", i, activeAddr);
+                m_process.AddDoNotFreeAddress(activeAddr);
+            }
+        }
     }
 }
 

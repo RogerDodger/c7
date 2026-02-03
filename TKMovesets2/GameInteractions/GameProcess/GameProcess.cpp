@@ -237,11 +237,52 @@ bool GameProcess::Attach(const char* processName, DWORD processExtraFlags)
 void GameProcess::Detach()
 {
 	if (m_processHandle != nullptr) {
+		// Helper to check if an address should be skipped
+		auto shouldSkip = [this](gameAddr addr) {
+			for (auto skipAddr : doNotFreeAddresses) {
+				if (addr == skipAddr) return true;
+			}
+			return false;
+		};
+
+		// Free all allocated memory in the game process before detaching
+		DEBUG_LOG("Freeing allocated memory blocks (skipping %lld active)...\n", doNotFreeAddresses.size());
+		for (auto& [addr, size] : allocatedMemory) {
+			if (shouldSkip(addr)) {
+				DEBUG_LOG("Skipping active moveset %llx (size %lld)\n", addr, size);
+				continue;
+			}
+			DEBUG_LOG("Freeing game memory block %llx (size %lld)\n", addr, size);
+			VirtualFreeEx(m_processHandle, (LPVOID)addr, 0, MEM_RELEASE);
+		}
+		allocatedMemory.clear();
+
+		// Also free any pending blocks in the to-free queue
+		DEBUG_LOG("Freeing %lld pending memory blocks...\n", m_toFree.size());
+		for (auto& [date, addr] : m_toFree) {
+			if (shouldSkip(addr)) {
+				DEBUG_LOG("Skipping active moveset %llx\n", addr);
+				continue;
+			}
+			DEBUG_LOG("Freeing pending game memory block %llx\n", addr);
+			VirtualFreeEx(m_processHandle, (LPVOID)addr, 0, MEM_RELEASE);
+		}
+		m_toFree.clear();
+		doNotFreeAddresses.clear();
+
 		CloseHandle(m_processHandle);
 		m_processHandle = nullptr;
 	}
 	mainModule.address = -1;
 	status = GameProcessErrcode_PROC_NOT_ATTACHED;
+}
+
+void GameProcess::AddDoNotFreeAddress(gameAddr addr)
+{
+	if (addr != 0) {
+		doNotFreeAddresses.push_back(addr);
+		DEBUG_LOG("Added do-not-free address: %llx\n", addr);
+	}
 }
 
 bool GameProcess::IsAttached() const
