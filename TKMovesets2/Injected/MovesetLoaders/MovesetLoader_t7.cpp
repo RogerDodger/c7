@@ -41,6 +41,9 @@ namespace T7Functions
 		// Called at the start of the loading screen for the host player
 		typedef void (*MatchedAsHost)(uint64_t, char, uint64_t);
 	};
+
+	// Called when player confirms "Random" in stage select. Returns selected stage ID.
+	typedef uint8_t (*UIRandomStage)(uint64_t stageManager, uint8_t playerIndex);
 }
 
 // -- Helpers --
@@ -309,6 +312,38 @@ namespace T7Hooks
 			return (uint32_t)0;
 		}
 	};
+
+	// UI Random stage selection hook - called when player confirms "Random" in stage select
+	uint8_t UIRandomStage(uint64_t stageManager, uint8_t playerIndex)
+	{
+		// Stages to exclude from random selection
+		static const uint8_t excludedStages[] = {
+			1,   // Forgotten Realm
+			3,   // Arctic Snowfall
+			40,  // Infinite Azure
+			55   // Infinite Azure 2
+		};
+
+		auto isExcluded = [](uint8_t stage) {
+			for (int i = 0; i < sizeof(excludedStages) / sizeof(excludedStages[0]); i++) {
+				if (stage == excludedStages[i]) return true;
+			}
+			return false;
+		};
+
+		// Keep rerolling until we get a non-excluded stage
+		uint8_t selectedStage;
+		int attempts = 0;
+		do {
+			selectedStage = g_loader->CastTrampoline<T7Functions::UIRandomStage>
+				("TK__UIRandomStage")(stageManager, playerIndex);
+			attempts++;
+		} while (isExcluded(selectedStage) && attempts < 100);
+
+		DEBUG_LOG("UIRandomStage: player=%u, selected=%u (attempts=%d)\n", playerIndex, selectedStage, attempts);
+
+		return selectedStage;
+	}
 }
 
 // -- -- //
@@ -375,6 +410,9 @@ void MovesetLoaderT7::InitHooks()
 	RegisterHook("TK__NetManager::GetSyncBattleStart", m_moduleName, "f_NetManager::GetSyncBattleStart", GET_HOOK(NetManager::GetSyncBattleStart));
 	RegisterFunction("TK__GetPlayerFromID", m_moduleName, "f_GetPlayerFromID");
 
+	// UI Random stage selection hook - called when player confirms "Random" in stage select
+	RegisterHook("TK__UIRandomStage", m_moduleName, "f_UIRandomStage", GET_HOOK(UIRandomStage));
+
 	// Other less important things
 	RegisterFunction("TK__ExecuteExtraprop", m_moduleName, "f_ExecuteExtraprop");
 
@@ -420,6 +458,8 @@ void MovesetLoaderT7::OnInitEnd()
 	HookFunction("TK__NetInterCS::MatchedAsClient");
 	HookFunction("TK__NetInterCS::MatchedAsHost");
 	HookFunction("TK__NetManager::GetSyncBattleStart");
+	HookFunction("TK__UIRandomStage");
+
 	//HookFunction("TK__ExecuteExtraprop");
 
 	// Other
