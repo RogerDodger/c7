@@ -82,6 +82,8 @@ public:
 	void HookFunction(const char* functionName);
 	// Unhooks a function if it exists and was successfully registered before, does nothing otherwise
 	void UnhookFunction(const char* functionName);
+	// Unhooks all hooked functions
+	void UnhookAll();
 	// Returns the casted address of a previously registered function
 	template<class T> T CastFunction(const char* functionName) const;
 	// Returns the value of a variable, reading sizeof(T)

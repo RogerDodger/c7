@@ -217,12 +217,26 @@ void MovesetLoader::UnhookFunction(const char* functionName)
     auto hook = m_hooks.find(functionName);
     if (hook != m_hooks.end() && hook->second.isHooked) {
         DEBUG_LOG("Unhook %s\n", functionName);
-        hook->second.detour->hook();
+        hook->second.detour->unHook();
         hook->second.isHooked = false;
     }
     else {
         DEBUG_ERR("MovesetLoader::UnhookFunction() : Could not find %s", functionName);
     }
+}
+
+void MovesetLoader::UnhookAll()
+{
+    DEBUG_LOG("Unhooking all functions...\n");
+    for (auto& [name, hook] : m_hooks)
+    {
+        if (hook.isHooked) {
+            DEBUG_LOG("Unhook %s\n", name.c_str());
+            hook.detour->unHook();
+            hook.isHooked = false;
+        }
+    }
+    DEBUG_LOG("All functions unhooked.\n");
 }
 
 // -- Static helper -- //
@@ -284,9 +298,32 @@ static void Run()
     {
         DEBUG_LOG("Starting mainloop.\n");
         g_loader->Mainloop();
-        DEBUG_LOG("Mainloop stopped. Unloading the DLL.\n");
-        // If mainloop is stopped then we have no reason to let the DLL stay as loaded
+        DEBUG_LOG("Mainloop stopped.\n");
+
+        // Unhook all functions FIRST, before any cleanup
+        // This restores original game code so game threads won't call into DLL anymore
+        g_loader->UnhookAll();
+
+        // Wait for any in-flight hooked function calls to complete
+        // Game threads may still be executing inside our hook functions
+        DEBUG_LOG("Waiting for in-flight calls to complete...\n");
+        Sleep(500);
+
+        // Now safe to clean up
+        DEBUG_LOG("Cleaning up loader...\n");
         delete g_loader;
+        g_loader = nullptr;
+
+        DEBUG_LOG("Unloading DLL.\n");
+
+#ifdef BUILD_TYPE_DEBUG
+        // Close stdout/stderr and free the debug console before unloading
+        // This prevents crashes if user closes the orphaned console window
+        fclose(stdout);
+        fclose(stderr);
+        FreeConsole();
+#endif
+
         FreeLibraryAndExitThread(hModule, 0);
     }
 }
