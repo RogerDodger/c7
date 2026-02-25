@@ -123,6 +123,28 @@ public:
 		}
 	} syncStatus;
 
+	// Match reporting state
+	struct {
+		bool active = false;
+		uint64_t lastHeartbeatTime = 0;
+		uint64_t matchStartTime = 0;
+		uint32_t heartbeatCount = 0;
+		uint64_t opponentSteamId = 0;
+
+		void Start(uint64_t now) {
+			active = true;
+			matchStartTime = now;
+			lastHeartbeatTime = now;
+			heartbeatCount = 0;
+		}
+
+		void Stop() {
+			active = false;
+			heartbeatCount = 0;
+			opponentSteamId = 0;
+		}
+	} matchState;
+
 	void InitHooks() override;
 	void OnInitEnd() override;
 	void Mainloop() override;

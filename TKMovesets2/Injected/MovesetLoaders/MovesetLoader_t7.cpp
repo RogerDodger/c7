@@ -44,6 +44,9 @@ namespace T7Functions
 
 	// Called when player confirms "Random" in stage select. Returns selected stage ID.
 	typedef uint8_t (*UIRandomStage)(uint64_t stageManager, uint8_t playerIndex);
+
+	// Called after a round ends to check if the match should end
+	typedef bool(*IsMatchOver)(void* player1, void* player2);
 }
 
 // -- Helpers --
@@ -255,9 +258,24 @@ namespace T7Hooks
 
 	namespace NetInterCS
 	{
+		// Opponent Steam ID is at offset +0x30 in the match info struct
+		// TODO: Verify in >2 player lobbies whether these hooks fire for spectators.
+		// If they do, opponentSteamId may be wrong and we need another way to
+		// determine if we are a participant vs spectator.
+		static constexpr int OPPONENT_STEAM_ID_OFFSET = 0x30;
+
+		static uint64_t ReadOpponentSteamId(uint64_t matchInfoPtr)
+		{
+			return *(uint64_t*)(matchInfoPtr + OPPONENT_STEAM_ID_OFFSET);
+		}
+
 		void MatchedAsClient(uint64_t a1, uint64_t a2)
 		{
-			DEBUG_LOG("-- NetInterCS::MatchedAsHost --\n");
+			uint64_t oppSteamId = ReadOpponentSteamId(a2);
+			DEBUG_LOG("-- NetInterCS::MatchedAsClient --\n");
+			DEBUG_LOG("   Opponent Steam ID: %llu\n", oppSteamId);
+			g_loader->matchState.opponentSteamId = oppSteamId;
+
 			g_loader->CastTrampoline<T7Functions::NetInterCS::MatchedAsClient>("TK__NetInterCS::MatchedAsClient")(a1, a2);
 
 			if (g_loader->sharedMemPtr->moveset_loader_mode == MovesetLoaderMode_OnlineMode) {
@@ -267,7 +285,11 @@ namespace T7Hooks
 
 		void MatchedAsHost(uint64_t a1, char a2, uint64_t a3)
 		{
+			uint64_t oppSteamId = ReadOpponentSteamId(a3);
 			DEBUG_LOG("-- NetInterCS::MatchedAsHost --\n");
+			DEBUG_LOG("   Opponent Steam ID: %llu\n", oppSteamId);
+			g_loader->matchState.opponentSteamId = oppSteamId;
+
 			g_loader->CastTrampoline<T7Functions::NetInterCS::MatchedAsHost>("TK__NetInterCS::MatchedAsHost")(a1, a2, a3);
 
 			if (g_loader->sharedMemPtr->moveset_loader_mode == MovesetLoaderMode_OnlineMode) {
@@ -282,38 +304,15 @@ namespace T7Hooks
 		uint64_t GetSyncBattleStart(uint64_t a1)
 		{
 			uint64_t result = g_loader->CastTrampoline<T7Functions::NetManager::GetSyncBattleStart>("TK__NetManager::GetSyncBattleStart")(a1);
-			DEBUG_LOG("-- GetSyncBattleStart = 0x%llx --\n", result);
-			if (result != 1 || !g_loader->sharedMemPtr->IsAttemptingOnlinePlay()) {
-				return result;
+
+			if (result == 1 && !g_loader->matchState.active) {
+				uint64_t now = Helpers::getCurrentTimestamp();
+				g_loader->matchState.Start(now);
+				DEBUG_LOG("[MatchReport] Match started vs %llu (t=%llu)\n",
+					g_loader->matchState.opponentSteamId, now);
 			}
 
-			// Loading is finished no need to hold this up any longer
-			if (g_loader->sharedMemPtr->moveset_sync_status == MovesetSyncStatus_Ready) {
-				return 1;
-			}
-
-			if (g_loader->syncStatus.battle_start_call_time == 0) {
-				// Get timestamp of first time 1 was returned
-				g_loader->syncStatus.battle_start_call_time = Helpers::getCurrentTimestamp();
-			}
-			else {
-				// Wait up to X seconds before finally giving up on loading
-				uint64_t diff = Helpers::getCurrentTimestamp() - g_loader->syncStatus.battle_start_call_time;
-
-				unsigned int maxSyncedWaitTime = 60; // Wait 60 seconds max if moveset sync has started
-				unsigned int maxUnsyncedWaitTime = 15; // Wait 15 seconds max if moveset sync has not started
-
-				// Different wait time, smaller if opponent has not locked-in
-				const unsigned int maxWaitTime = g_loader->syncStatus.received_opponent_sync_request ? maxSyncedWaitTime : maxUnsyncedWaitTime;
-
-				DEBUG_LOG("GetSyncBattleStart: %llu / %u\n", diff + 1, maxWaitTime);
-				if (diff >= maxWaitTime) {
-					g_loader->sharedMemPtr->moveset_sync_status = MovesetSyncStatus_NotStarted;
-					DEBUG_LOG("GetSyncBattleStart: Moveset still wasn't received after %u seconds\n", maxWaitTime);
-					return 1;
-				}
-			}
-			return (uint32_t)0;
+			return result;
 		}
 	};
 
@@ -347,6 +346,33 @@ namespace T7Hooks
 		DEBUG_LOG("UIRandomStage: player=%u, selected=%u (attempts=%d)\n", playerIndex, selectedStage, attempts);
 
 		return selectedStage;
+	}
+
+	bool IsMatchOver(void* player1, void* player2)
+	{
+		bool result = g_loader->CastTrampoline<T7Functions::IsMatchOver>("TK__IsMatchOver")(player1, player2);
+
+		if (result && g_loader->matchState.active) {
+			uint32_t p1_wins = *(uint32_t*)g_loader->variables["gTK_p1_roundwins"];
+			uint32_t p2_wins = *(uint32_t*)g_loader->variables["gTK_p2_roundwins"];
+
+			bool localIsP1 = IsLocalPlayerP1();
+			uint32_t localWins = localIsP1 ? p1_wins : p2_wins;
+			uint32_t opponentWins = localIsP1 ? p2_wins : p1_wins;
+
+			const char* resultStr;
+			if (localWins > opponentWins) resultStr = "WIN";
+			else if (opponentWins > localWins) resultStr = "LOSS";
+			else resultStr = "DRAW";
+
+			uint64_t elapsed = Helpers::getCurrentTimestamp() - g_loader->matchState.matchStartTime;
+			DEBUG_LOG("[MatchReport] Match over! %s %u-%u vs %llu (duration: %llus)\n",
+				resultStr, localWins, opponentWins,
+				g_loader->matchState.opponentSteamId, elapsed);
+			g_loader->matchState.Stop();
+		}
+
+		return result;
 	}
 }
 
@@ -417,6 +443,9 @@ void MovesetLoaderT7::InitHooks()
 	// UI Random stage selection hook - called when player confirms "Random" in stage select
 	RegisterHook("TK__UIRandomStage", m_moduleName, "f_UIRandomStage", GET_HOOK(UIRandomStage));
 
+	// Match end check hook
+	RegisterHook("TK__IsMatchOver", m_moduleName, "f_IsMatchOver", GET_HOOK(IsMatchOver));
+
 	// Other less important things
 	RegisterFunction("TK__ExecuteExtraprop", m_moduleName, "f_ExecuteExtraprop");
 
@@ -463,6 +492,12 @@ void MovesetLoaderT7::OnInitEnd()
 	HookFunction("TK__NetInterCS::MatchedAsHost");
 	HookFunction("TK__NetManager::GetSyncBattleStart");
 	HookFunction("TK__UIRandomStage");
+	HookFunction("TK__IsMatchOver");
+
+	// Resolve match result addresses
+	variables["gTK_p1_roundwins"] = addresses.ReadPtrPathInCurrProcess("p1_roundwins_addr", moduleAddr);
+	variables["gTK_p2_roundwins"] = addresses.ReadPtrPathInCurrProcess("p2_roundwins_addr", moduleAddr);
+	variables["gTK_roundstowin"] = addresses.ReadPtrPathInCurrProcess("roundstowin_addr", moduleAddr);
 
 	//HookFunction("TK__ExecuteExtraprop");
 
@@ -474,10 +509,24 @@ void MovesetLoaderT7::OnInitEnd()
 
 void MovesetLoaderT7::Mainloop()
 {
+	constexpr uint64_t HEARTBEAT_INTERVAL_SEC = 5;
+
 	while (!mustStop)
 	{
 		if (CanConsumePackets()) {
 			ConsumePackets();
+		}
+
+		// Match reporting heartbeat
+		if (matchState.active) {
+			uint64_t now = Helpers::getCurrentTimestamp();
+			if (now - matchState.lastHeartbeatTime >= HEARTBEAT_INTERVAL_SEC) {
+				matchState.heartbeatCount++;
+				uint64_t elapsed = now - matchState.matchStartTime;
+				DEBUG_LOG("[MatchReport] Heartbeat #%u (match time: %llus)\n",
+					matchState.heartbeatCount, elapsed);
+				matchState.lastHeartbeatTime = now;
+			}
 		}
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(GAME_INTERACTION_THREAD_SLEEP_MS));
