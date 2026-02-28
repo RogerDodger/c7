@@ -259,9 +259,7 @@ namespace T7Hooks
 	namespace NetInterCS
 	{
 		// Opponent Steam ID is at offset +0x30 in the match info struct
-		// TODO: Verify in >2 player lobbies whether these hooks fire for spectators.
-		// If they do, opponentSteamId may be wrong and we need another way to
-		// determine if we are a participant vs spectator.
+		// Verified: these hooks do NOT fire for spectators in >2 player lobbies
 		static constexpr int OPPONENT_STEAM_ID_OFFSET = 0x30;
 
 		static uint64_t ReadOpponentSteamId(uint64_t matchInfoPtr)
@@ -272,8 +270,7 @@ namespace T7Hooks
 		void MatchedAsClient(uint64_t a1, uint64_t a2)
 		{
 			uint64_t oppSteamId = ReadOpponentSteamId(a2);
-			DEBUG_LOG("-- NetInterCS::MatchedAsClient --\n");
-			DEBUG_LOG("   Opponent Steam ID: %llu\n", oppSteamId);
+			DEBUG_LOG("-- NetInterCS::MatchedAsClient -- Opponent Steam ID: %llu\n", oppSteamId);
 			g_loader->matchState.opponentSteamId = oppSteamId;
 
 			g_loader->CastTrampoline<T7Functions::NetInterCS::MatchedAsClient>("TK__NetInterCS::MatchedAsClient")(a1, a2);
@@ -286,8 +283,7 @@ namespace T7Hooks
 		void MatchedAsHost(uint64_t a1, char a2, uint64_t a3)
 		{
 			uint64_t oppSteamId = ReadOpponentSteamId(a3);
-			DEBUG_LOG("-- NetInterCS::MatchedAsHost --\n");
-			DEBUG_LOG("   Opponent Steam ID: %llu\n", oppSteamId);
+			DEBUG_LOG("-- NetInterCS::MatchedAsHost -- Opponent Steam ID: %llu\n", oppSteamId);
 			g_loader->matchState.opponentSteamId = oppSteamId;
 
 			g_loader->CastTrampoline<T7Functions::NetInterCS::MatchedAsHost>("TK__NetInterCS::MatchedAsHost")(a1, a2, a3);
@@ -509,7 +505,7 @@ void MovesetLoaderT7::OnInitEnd()
 
 void MovesetLoaderT7::Mainloop()
 {
-	constexpr uint64_t HEARTBEAT_INTERVAL_SEC = 5;
+	constexpr uint64_t HEARTBEAT_INTERVAL_SEC = 2;
 
 	while (!mustStop)
 	{
@@ -522,10 +518,18 @@ void MovesetLoaderT7::Mainloop()
 			uint64_t now = Helpers::getCurrentTimestamp();
 			if (now - matchState.lastHeartbeatTime >= HEARTBEAT_INTERVAL_SEC) {
 				matchState.heartbeatCount++;
-				uint64_t elapsed = now - matchState.matchStartTime;
-				DEBUG_LOG("[MatchReport] Heartbeat #%u (match time: %llus)\n",
-					matchState.heartbeatCount, elapsed);
 				matchState.lastHeartbeatTime = now;
+
+				// Check if opponent is still connected
+				P2PSessionState_t sessionState;
+				CSteamID opponentId(matchState.opponentSteamId);
+				if (!SteamHelper::SteamNetworking()->GetP2PSessionState(opponentId, &sessionState)
+					|| (!sessionState.m_bConnectionActive && !sessionState.m_bConnecting)) {
+					uint64_t elapsed = now - matchState.matchStartTime;
+					DEBUG_LOG("[MatchReport] Opponent disconnected (duration: %llus, heartbeats: %u)\n",
+						elapsed, matchState.heartbeatCount);
+					matchState.Stop();
+				}
 			}
 		}
 
