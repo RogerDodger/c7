@@ -335,3 +335,6 @@ target_link_libraries(TKMovesetLoader PRIVATE liblzma::liblzma)
 # Hook (Polyhook)
 find_package(PolyHook_2 CONFIG REQUIRED)
 target_link_libraries(TKMovesetLoader PRIVATE PolyHook_2::PolyHook_2)
+
+# HTTP requests (WinHTTP)
+target_link_libraries(TKMovesetLoader PRIVATE winhttp)

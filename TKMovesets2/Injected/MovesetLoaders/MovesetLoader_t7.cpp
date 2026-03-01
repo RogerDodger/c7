@@ -7,6 +7,9 @@
 
 #include "steam_api.h"
 
+#include <windows.h>
+#include <winhttp.h>
+
 using namespace StructsT7;
 
 // Reference to the MovesetLoader
@@ -146,6 +149,122 @@ static unsigned int GetLobbyOpponentMemberId()
 	return 0;
 }
 
+// -- Match reporting -- //
+
+// POST binary payload to the server. Returns response body (empty on failure).
+static std::vector<uint8_t> PostToServer(const wchar_t* path, const void* data, size_t dataSize)
+{
+	std::vector<uint8_t> response;
+
+	// Get Steam auth ticket
+	uint8_t ticketBuf[1024];
+	uint32_t ticketLen = 0;
+	if (SteamHelper::SteamUser()->GetAuthSessionTicket(ticketBuf, sizeof(ticketBuf), &ticketLen, nullptr) == k_HAuthTicketInvalid) {
+		DEBUG_LOG("[MatchReport] Failed to get auth ticket\n");
+		return response;
+	}
+
+	// Build binary payload: [u16 ticket_len][ticket][data]
+	uint16_t ticketLen16 = (uint16_t)ticketLen;
+	size_t payloadSize = sizeof(ticketLen16) + ticketLen + dataSize;
+	std::vector<uint8_t> payload(payloadSize);
+	size_t offset = 0;
+	memcpy(payload.data() + offset, &ticketLen16, sizeof(ticketLen16)); offset += sizeof(ticketLen16);
+	memcpy(payload.data() + offset, ticketBuf, ticketLen); offset += ticketLen;
+	memcpy(payload.data() + offset, data, dataSize);
+
+	// Send via WinHTTP
+	HINTERNET hSession = WinHttpOpen(L"TKMovesets/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+	if (!hSession) { DEBUG_LOG("[MatchReport] WinHttpOpen failed\n"); return response; }
+
+	HINTERNET hConnect = WinHttpConnect(hSession, L"192.168.1.126", 8080, 0);
+	if (!hConnect) { DEBUG_LOG("[MatchReport] WinHttpConnect failed\n"); WinHttpCloseHandle(hSession); return response; }
+
+	HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
+	if (!hRequest) { DEBUG_LOG("[MatchReport] WinHttpOpenRequest failed\n"); WinHttpCloseHandle(hConnect); WinHttpCloseHandle(hSession); return response; }
+
+	WinHttpSetTimeouts(hRequest, 5000, 5000, 5000, 5000);
+
+	BOOL sent = WinHttpSendRequest(hRequest, L"Content-Type: application/octet-stream", -1, payload.data(), (DWORD)payloadSize, (DWORD)payloadSize, 0);
+	if (sent && WinHttpReceiveResponse(hRequest, NULL)) {
+		DWORD bytesRead = 0;
+		uint8_t buf[256];
+		while (WinHttpReadData(hRequest, buf, sizeof(buf), &bytesRead) && bytesRead > 0) {
+			response.insert(response.end(), buf, buf + bytesRead);
+			bytesRead = 0;
+		}
+	} else {
+		DEBUG_LOG("[MatchReport] HTTP request failed: %lu\n", GetLastError());
+	}
+
+	WinHttpCloseHandle(hRequest);
+	WinHttpCloseHandle(hConnect);
+	WinHttpCloseHandle(hSession);
+	return response;
+}
+
+static void SendMatchStartThread()
+{
+	auto& ms = g_loader->matchState;
+
+	MatchStartReport report = {};
+	report.reporter_steam_id = SteamHelper::SteamUser()->GetSteamID().ConvertToUint64();
+	report.p1_steam_id = ms.p1_steam_id;
+	report.p2_steam_id = ms.p2_steam_id;
+	report.p1_char_id = ms.p1_char_id;
+	report.p2_char_id = ms.p2_char_id;
+	report.stage_id = ms.stage_id;
+	strncpy(report.reporter_name, SteamHelper::SteamFriends()->GetPersonaName(),
+		sizeof(report.reporter_name) - 1);
+	strncpy(report.client_version, PROGRAM_CLIENT_VERSION, sizeof(report.client_version) - 1);
+
+	DEBUG_LOG("[MatchReport] Sending start: p1=%llu p2=%llu chars=%u/%u stage=%u\n",
+		report.p1_steam_id, report.p2_steam_id,
+		report.p1_char_id, report.p2_char_id, report.stage_id);
+
+	auto response = PostToServer(L"/match/start", &report, sizeof(report));
+	if (response.size() >= 16) {
+		memcpy(g_loader->matchState.match_id, response.data(), 16);
+		DEBUG_LOG("[MatchReport] Got match_id (uuid)\n");
+	} else {
+		DEBUG_LOG("[MatchReport] Failed to get match_id from server\n");
+	}
+}
+
+static void SendMatchEndThread()
+{
+	auto& ms = g_loader->matchState;
+
+	uint8_t zero_id[16] = {};
+	if (memcmp(ms.match_id, zero_id, 16) == 0) {
+		DEBUG_LOG("[MatchReport] No match_id, skipping end report\n");
+		return;
+	}
+
+	MatchEndReport report = {};
+	memcpy(report.match_id, ms.match_id, 16);
+	report.reporter_steam_id = SteamHelper::SteamUser()->GetSteamID().ConvertToUint64();
+	report.p1_wins = *(uint32_t*)g_loader->variables["gTK_p1_roundwins"];
+	report.p2_wins = *(uint32_t*)g_loader->variables["gTK_p2_roundwins"];
+	report.end_reason = ms.end_reason;
+	strncpy(report.client_version, PROGRAM_CLIENT_VERSION, sizeof(report.client_version) - 1);
+
+	DEBUG_LOG("[MatchReport] Sending end: score=%u-%u reason=%u\n",
+		report.p1_wins, report.p2_wins, report.end_reason);
+
+	PostToServer(L"/match/end", &report, sizeof(report));
+}
+
+static void SendMatchStart()
+{
+	std::thread(SendMatchStartThread).detach();
+}
+
+static void SendMatchEnd()
+{
+	std::thread(SendMatchEndThread).detach();
+}
+
 // -- Hook functions --
 
 namespace T7Hooks
@@ -269,9 +388,8 @@ namespace T7Hooks
 
 		void MatchedAsClient(uint64_t a1, uint64_t a2)
 		{
-			uint64_t oppSteamId = ReadOpponentSteamId(a2);
-			DEBUG_LOG("-- NetInterCS::MatchedAsClient -- Opponent Steam ID: %llu\n", oppSteamId);
-			g_loader->matchState.opponentSteamId = oppSteamId;
+			g_loader->matchState.opponent_steam_id = ReadOpponentSteamId(a2);
+			DEBUG_LOG("-- NetInterCS::MatchedAsClient -- Opponent Steam ID: %llu\n", g_loader->matchState.opponent_steam_id);
 
 			g_loader->CastTrampoline<T7Functions::NetInterCS::MatchedAsClient>("TK__NetInterCS::MatchedAsClient")(a1, a2);
 
@@ -282,9 +400,8 @@ namespace T7Hooks
 
 		void MatchedAsHost(uint64_t a1, char a2, uint64_t a3)
 		{
-			uint64_t oppSteamId = ReadOpponentSteamId(a3);
-			DEBUG_LOG("-- NetInterCS::MatchedAsHost -- Opponent Steam ID: %llu\n", oppSteamId);
-			g_loader->matchState.opponentSteamId = oppSteamId;
+			g_loader->matchState.opponent_steam_id = ReadOpponentSteamId(a3);
+			DEBUG_LOG("-- NetInterCS::MatchedAsHost -- Opponent Steam ID: %llu\n", g_loader->matchState.opponent_steam_id);
 
 			g_loader->CastTrampoline<T7Functions::NetInterCS::MatchedAsHost>("TK__NetInterCS::MatchedAsHost")(a1, a2, a3);
 
@@ -304,8 +421,15 @@ namespace T7Hooks
 			if (result == 1 && !g_loader->matchState.active) {
 				uint64_t now = Helpers::getCurrentTimestamp();
 				g_loader->matchState.Start(now);
-				DEBUG_LOG("[MatchReport] Match started vs %llu (t=%llu)\n",
-					g_loader->matchState.opponentSteamId, now);
+
+				// Read match info
+				uint64_t localSteamId = SteamHelper::SteamUser()->GetSteamID().ConvertToUint64();
+				bool localIsP1 = IsLocalPlayerP1();
+				g_loader->matchState.p1_steam_id = localIsP1 ? localSteamId : g_loader->matchState.opponent_steam_id;
+				g_loader->matchState.p2_steam_id = localIsP1 ? g_loader->matchState.opponent_steam_id : localSteamId;
+
+				DEBUG_LOG("[MatchReport] Match started: p1=%llu p2=%llu\n",
+					g_loader->matchState.p1_steam_id, g_loader->matchState.p2_steam_id);
 			}
 
 			return result;
@@ -349,22 +473,7 @@ namespace T7Hooks
 		bool result = g_loader->CastTrampoline<T7Functions::IsMatchOver>("TK__IsMatchOver")(player1, player2);
 
 		if (result && g_loader->matchState.active) {
-			uint32_t p1_wins = *(uint32_t*)g_loader->variables["gTK_p1_roundwins"];
-			uint32_t p2_wins = *(uint32_t*)g_loader->variables["gTK_p2_roundwins"];
-
-			bool localIsP1 = IsLocalPlayerP1();
-			uint32_t localWins = localIsP1 ? p1_wins : p2_wins;
-			uint32_t opponentWins = localIsP1 ? p2_wins : p1_wins;
-
-			const char* resultStr;
-			if (localWins > opponentWins) resultStr = "WIN";
-			else if (opponentWins > localWins) resultStr = "LOSS";
-			else resultStr = "DRAW";
-
-			uint64_t elapsed = Helpers::getCurrentTimestamp() - g_loader->matchState.matchStartTime;
-			DEBUG_LOG("[MatchReport] Match over! %s %u-%u vs %llu (duration: %llus)\n",
-				resultStr, localWins, opponentWins,
-				g_loader->matchState.opponentSteamId, elapsed);
+			SendMatchEnd();
 			g_loader->matchState.Stop();
 		}
 
@@ -494,6 +603,8 @@ void MovesetLoaderT7::OnInitEnd()
 	variables["gTK_p1_roundwins"] = addresses.ReadPtrPathInCurrProcess("p1_roundwins_addr", moduleAddr);
 	variables["gTK_p2_roundwins"] = addresses.ReadPtrPathInCurrProcess("p2_roundwins_addr", moduleAddr);
 	variables["gTK_roundstowin"] = addresses.ReadPtrPathInCurrProcess("roundstowin_addr", moduleAddr);
+	variables["gTK_stage_id"] = addresses.ReadPtrPathInCurrProcess("stage_id_addr", moduleAddr);
+	variables["gTK_game_state"] = addresses.ReadPtrPathInCurrProcess("game_state_addr", moduleAddr);
 
 	//HookFunction("TK__ExecuteExtraprop");
 
@@ -515,19 +626,44 @@ void MovesetLoaderT7::Mainloop()
 
 		// Match reporting heartbeat
 		if (matchState.active) {
+			// Poll for match info (char IDs, stage) once game state reaches 0 or 1 (intro playing)
+			// Require two consecutive heartbeats in this state to avoid reading mid-write
+			if (!matchState.match_info_ready) {
+				uint32_t gameState = *(uint32_t*)variables["gTK_game_state"];
+				if (gameState == 0 || gameState == 1) {
+					matchState.match_info_poll_count++;
+					if (matchState.match_info_poll_count >= 2) {
+						auto playerList = (uint64_t*)variables["gTK_playerList"];
+						uint64_t charaIdOffset = addresses.GetValue("chara_id_offset");
+						matchState.p1_char_id = *(uint8_t*)(playerList[0] + charaIdOffset);
+						matchState.p2_char_id = *(uint8_t*)(playerList[1] + charaIdOffset);
+						matchState.stage_id = *(uint32_t*)variables["gTK_stage_id"];
+						matchState.match_info_ready = true;
+
+						DEBUG_LOG("[MatchReport] Match info ready: chars=%u/%u stage=%u\n",
+							matchState.p1_char_id, matchState.p2_char_id, matchState.stage_id);
+						SendMatchStart();
+					}
+				} else {
+					matchState.match_info_poll_count = 0;
+				}
+			}
+
 			uint64_t now = Helpers::getCurrentTimestamp();
-			if (now - matchState.lastHeartbeatTime >= HEARTBEAT_INTERVAL_SEC) {
-				matchState.heartbeatCount++;
-				matchState.lastHeartbeatTime = now;
+			if (now - matchState.last_heartbeat_time >= HEARTBEAT_INTERVAL_SEC) {
+				matchState.heartbeat_count++;
+				matchState.last_heartbeat_time = now;
 
 				// Check if opponent is still connected
 				P2PSessionState_t sessionState;
-				CSteamID opponentId(matchState.opponentSteamId);
+				CSteamID opponentId(matchState.opponent_steam_id);
 				if (!SteamHelper::SteamNetworking()->GetP2PSessionState(opponentId, &sessionState)
 					|| (!sessionState.m_bConnectionActive && !sessionState.m_bConnecting)) {
-					uint64_t elapsed = now - matchState.matchStartTime;
+					uint64_t elapsed = now - matchState.match_start_time;
 					DEBUG_LOG("[MatchReport] Opponent disconnected (duration: %llus, heartbeats: %u)\n",
-						elapsed, matchState.heartbeatCount);
+						elapsed, matchState.heartbeat_count);
+					matchState.end_reason = MatchEndReason_Desync;
+					SendMatchEnd();
 					matchState.Stop();
 				}
 			}

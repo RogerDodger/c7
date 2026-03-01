@@ -6,6 +6,33 @@
 #include "SharedMemory_t7.h"
 #include "steam_api.h"
 
+// -- Match Report -- //
+
+enum MatchEndReason : uint32_t {
+	MatchEndReason_Normal = 0,
+	MatchEndReason_Desync = 1,
+};
+
+struct MatchStartReport {
+	uint64_t reporter_steam_id;
+	uint64_t p1_steam_id;
+	uint64_t p2_steam_id;
+	uint32_t p1_char_id;
+	uint32_t p2_char_id;
+	uint32_t stage_id;
+	char     reporter_name[128];
+	char     client_version[16];
+};
+
+struct MatchEndReport {
+	uint8_t  match_id[16];
+	uint64_t reporter_steam_id;
+	uint32_t p1_wins;
+	uint32_t p2_wins;
+	uint32_t end_reason;
+	char     client_version[16];
+};
+
 // -- Packet -- //
 
 enum PacketT7Type_
@@ -126,22 +153,41 @@ public:
 	// Match reporting state
 	struct {
 		bool active = false;
-		uint64_t lastHeartbeatTime = 0;
-		uint64_t matchStartTime = 0;
-		uint32_t heartbeatCount = 0;
-		uint64_t opponentSteamId = 0;
+		bool match_info_ready = false;
+		uint32_t match_info_poll_count = 0;
+		uint64_t last_heartbeat_time = 0;
+		uint64_t match_start_time = 0;
+		uint32_t heartbeat_count = 0;
+		uint64_t opponent_steam_id = 0; // Set by MatchedAsClient/Host, resolved into p1/p2 at match start
+		uint64_t p1_steam_id = 0;
+		uint64_t p2_steam_id = 0;
+		uint32_t p1_char_id = UINT32_MAX;
+		uint32_t p2_char_id = UINT32_MAX;
+		uint32_t stage_id = UINT32_MAX;
+		uint32_t end_reason = MatchEndReason_Normal;
+		uint8_t match_id[16] = {};
 
 		void Start(uint64_t now) {
 			active = true;
-			matchStartTime = now;
-			lastHeartbeatTime = now;
-			heartbeatCount = 0;
+			match_info_ready = false;
+			match_info_poll_count = 0;
+			match_start_time = now;
+			last_heartbeat_time = now;
+			heartbeat_count = 0;
+			end_reason = MatchEndReason_Normal;
+			memset(match_id, 0, sizeof(match_id));
+			p1_char_id = UINT32_MAX;
+			p2_char_id = UINT32_MAX;
+			stage_id = UINT32_MAX;
 		}
 
 		void Stop() {
 			active = false;
-			heartbeatCount = 0;
-			opponentSteamId = 0;
+			match_info_ready = false;
+			heartbeat_count = 0;
+			opponent_steam_id = 0;
+			p1_steam_id = 0;
+			p2_steam_id = 0;
 		}
 	} matchState;
 
