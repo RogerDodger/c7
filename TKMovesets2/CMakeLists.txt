@@ -71,6 +71,7 @@ set(BINARY_SOURCES
                     "GameInteractions/GameExtract.cpp"
                     "GameInteractions/GameImport.cpp"
                     "GameInteractions/GameSharedMem.cpp"
+                    "GameInteractions/MatchReporting.cpp"
                     "GameInteractions/GameProcess/GameData.cpp"
                     "GameInteractions/GameProcess/GameProcess.cpp"  
 
@@ -336,5 +337,5 @@ target_link_libraries(TKMovesetLoader PRIVATE liblzma::liblzma)
 find_package(PolyHook_2 CONFIG REQUIRED)
 target_link_libraries(TKMovesetLoader PRIVATE PolyHook_2::PolyHook_2)
 
-# HTTP requests (WinHTTP)
-target_link_libraries(TKMovesetLoader PRIVATE winhttp)
+# HTTP requests (WinHTTP) - linked to GUI app, not the injected DLL
+target_link_libraries(TKMovesets2 PRIVATE winhttp)

@@ -2,6 +2,7 @@
 
 #include "Online.hpp"
 #include "GameImport.hpp"
+#include "MatchReporting.hpp"
 
 struct onlineImportEntry
 {
@@ -21,6 +22,8 @@ private:
 	Online* m_sharedMemHandler = nullptr;
 	// Online class that is going to be freed next FreeExpiredFactoryClasses() call
 	Online* m_toFree_sharedMemHandler = nullptr;
+	// Match reporter — polls shared memory flags and sends HTTP from the GUI process
+	MatchReporter m_matchReporter;
 
 	// Callback called whenever the process is re-attached
 	void OnProcessAttach() override;

@@ -65,4 +65,6 @@ public:
 
 	// Call MovesetLoaderDebug() in the remote process's injected DLL
 	void CallDebugFunction();
+	// Returns the raw shared memory pointer (base type)
+	SharedMemBase* GetSharedMemPtr() { return m_orig_sharedMemPtr; }
 };

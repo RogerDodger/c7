@@ -8,7 +8,6 @@
 #include "steam_api.h"
 
 #include <windows.h>
-#include <winhttp.h>
 
 using namespace StructsT7;
 
@@ -149,120 +148,60 @@ static unsigned int GetLobbyOpponentMemberId()
 	return 0;
 }
 
-// -- Match reporting -- //
+// -- Match reporting (shared memory writes) -- //
 
-// POST binary payload to the server. Returns response body (empty on failure).
-static std::vector<uint8_t> PostToServer(const wchar_t* path, const void* data, size_t dataSize)
+static void ObtainAuthTicket(SharedMemT7_MatchReport& mr)
 {
-	std::vector<uint8_t> response;
-
-	// Get Steam auth ticket
-	uint8_t ticketBuf[1024];
 	uint32_t ticketLen = 0;
-	if (SteamHelper::SteamUser()->GetAuthSessionTicket(ticketBuf, sizeof(ticketBuf), &ticketLen, nullptr) == k_HAuthTicketInvalid) {
+	if (SteamHelper::SteamUser()->GetAuthSessionTicket(mr.auth_ticket, sizeof(mr.auth_ticket), &ticketLen, nullptr) == k_HAuthTicketInvalid) {
 		DEBUG_LOG("[MatchReport] Failed to get auth ticket\n");
-		return response;
-	}
-
-	// Build binary payload: [u16 ticket_len][ticket][data]
-	uint16_t ticketLen16 = (uint16_t)ticketLen;
-	size_t payloadSize = sizeof(ticketLen16) + ticketLen + dataSize;
-	std::vector<uint8_t> payload(payloadSize);
-	size_t offset = 0;
-	memcpy(payload.data() + offset, &ticketLen16, sizeof(ticketLen16)); offset += sizeof(ticketLen16);
-	memcpy(payload.data() + offset, ticketBuf, ticketLen); offset += ticketLen;
-	memcpy(payload.data() + offset, data, dataSize);
-
-	// Send via WinHTTP
-	HINTERNET hSession = WinHttpOpen(L"TKMovesets/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-	if (!hSession) { DEBUG_LOG("[MatchReport] WinHttpOpen failed\n"); return response; }
-
-	HINTERNET hConnect = WinHttpConnect(hSession, L"192.168.1.126", 8080, 0);
-	if (!hConnect) { DEBUG_LOG("[MatchReport] WinHttpConnect failed\n"); WinHttpCloseHandle(hSession); return response; }
-
-	HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
-	if (!hRequest) { DEBUG_LOG("[MatchReport] WinHttpOpenRequest failed\n"); WinHttpCloseHandle(hConnect); WinHttpCloseHandle(hSession); return response; }
-
-	WinHttpSetTimeouts(hRequest, 5000, 5000, 5000, 5000);
-
-	BOOL sent = WinHttpSendRequest(hRequest, L"Content-Type: application/octet-stream", -1, payload.data(), (DWORD)payloadSize, (DWORD)payloadSize, 0);
-	if (sent && WinHttpReceiveResponse(hRequest, NULL)) {
-		DWORD bytesRead = 0;
-		uint8_t buf[256];
-		while (WinHttpReadData(hRequest, buf, sizeof(buf), &bytesRead) && bytesRead > 0) {
-			response.insert(response.end(), buf, buf + bytesRead);
-			bytesRead = 0;
-		}
-	} else {
-		DEBUG_LOG("[MatchReport] HTTP request failed: %lu\n", GetLastError());
-	}
-
-	WinHttpCloseHandle(hRequest);
-	WinHttpCloseHandle(hConnect);
-	WinHttpCloseHandle(hSession);
-	return response;
-}
-
-static void SendMatchStartThread()
-{
-	auto& ms = g_loader->matchState;
-
-	MatchStartReport report = {};
-	report.reporter_steam_id = SteamHelper::SteamUser()->GetSteamID().ConvertToUint64();
-	report.p1_steam_id = ms.p1_steam_id;
-	report.p2_steam_id = ms.p2_steam_id;
-	report.p1_char_id = ms.p1_char_id;
-	report.p2_char_id = ms.p2_char_id;
-	report.stage_id = ms.stage_id;
-	strncpy(report.reporter_name, SteamHelper::SteamFriends()->GetPersonaName(),
-		sizeof(report.reporter_name) - 1);
-	strncpy(report.client_version, PROGRAM_CLIENT_VERSION, sizeof(report.client_version) - 1);
-
-	DEBUG_LOG("[MatchReport] Sending start: p1=%llu p2=%llu chars=%u/%u stage=%u\n",
-		report.p1_steam_id, report.p2_steam_id,
-		report.p1_char_id, report.p2_char_id, report.stage_id);
-
-	auto response = PostToServer(L"/match/start", &report, sizeof(report));
-	if (response.size() >= 16) {
-		memcpy(g_loader->matchState.match_id, response.data(), 16);
-		DEBUG_LOG("[MatchReport] Got match_id (uuid)\n");
-	} else {
-		DEBUG_LOG("[MatchReport] Failed to get match_id from server\n");
-	}
-}
-
-static void SendMatchEndThread()
-{
-	auto& ms = g_loader->matchState;
-
-	uint8_t zero_id[16] = {};
-	if (memcmp(ms.match_id, zero_id, 16) == 0) {
-		DEBUG_LOG("[MatchReport] No match_id, skipping end report\n");
+		mr.auth_ticket_len = 0;
 		return;
 	}
-
-	MatchEndReport report = {};
-	memcpy(report.match_id, ms.match_id, 16);
-	report.reporter_steam_id = SteamHelper::SteamUser()->GetSteamID().ConvertToUint64();
-	report.p1_wins = *(uint32_t*)g_loader->variables["gTK_p1_roundwins"];
-	report.p2_wins = *(uint32_t*)g_loader->variables["gTK_p2_roundwins"];
-	report.end_reason = ms.end_reason;
-	strncpy(report.client_version, PROGRAM_CLIENT_VERSION, sizeof(report.client_version) - 1);
-
-	DEBUG_LOG("[MatchReport] Sending end: score=%u-%u reason=%u\n",
-		report.p1_wins, report.p2_wins, report.end_reason);
-
-	PostToServer(L"/match/end", &report, sizeof(report));
+	mr.auth_ticket_len = (uint16_t)ticketLen;
 }
 
 static void SendMatchStart()
 {
-	std::thread(SendMatchStartThread).detach();
+	auto& ms = g_loader->matchState;
+	auto& mr = g_loader->sharedMemPtr->matchReport;
+
+	mr.reporter_steam_id = SteamHelper::SteamUser()->GetSteamID().ConvertToUint64();
+	mr.p1_steam_id = ms.p1_steam_id;
+	mr.p2_steam_id = ms.p2_steam_id;
+	mr.p1_char_id = ms.p1_char_id;
+	mr.p2_char_id = ms.p2_char_id;
+	mr.stage_id = ms.stage_id;
+	strncpy(mr.reporter_name, SteamHelper::SteamFriends()->GetPersonaName(),
+		sizeof(mr.reporter_name) - 1);
+	strncpy(mr.client_version, PROGRAM_CLIENT_VERSION, sizeof(mr.client_version) - 1);
+
+	ObtainAuthTicket(mr);
+
+	DEBUG_LOG("[MatchReport] Requesting start: p1=%llu p2=%llu chars=%u/%u stage=%u\n",
+		mr.p1_steam_id, mr.p2_steam_id,
+		mr.p1_char_id, mr.p2_char_id, mr.stage_id);
+
+	mr.send_start = true;
 }
 
 static void SendMatchEnd()
 {
-	std::thread(SendMatchEndThread).detach();
+	auto& ms = g_loader->matchState;
+	auto& mr = g_loader->sharedMemPtr->matchReport;
+
+	mr.reporter_steam_id = SteamHelper::SteamUser()->GetSteamID().ConvertToUint64();
+	mr.p1_wins = *(uint32_t*)g_loader->variables["gTK_p1_roundwins"];
+	mr.p2_wins = *(uint32_t*)g_loader->variables["gTK_p2_roundwins"];
+	mr.end_reason = ms.end_reason;
+	strncpy(mr.client_version, PROGRAM_CLIENT_VERSION, sizeof(mr.client_version) - 1);
+
+	ObtainAuthTicket(mr);
+
+	DEBUG_LOG("[MatchReport] Requesting end: score=%u-%u reason=%u\n",
+		mr.p1_wins, mr.p2_wins, mr.end_reason);
+
+	mr.send_end = true;
 }
 
 // -- Hook functions --
@@ -617,6 +556,8 @@ void MovesetLoaderT7::OnInitEnd()
 void MovesetLoaderT7::Mainloop()
 {
 	constexpr uint64_t HEARTBEAT_INTERVAL_SEC = 2;
+	constexpr uint64_t SERVER_HEARTBEAT_INTERVAL_SEC = 30;
+	constexpr uint64_t SERVER_HEARTBEAT_TICKS = SERVER_HEARTBEAT_INTERVAL_SEC / HEARTBEAT_INTERVAL_SEC;
 
 	while (!mustStop)
 	{
@@ -665,6 +606,10 @@ void MovesetLoaderT7::Mainloop()
 					matchState.end_reason = MatchEndReason_Desync;
 					SendMatchEnd();
 					matchState.Stop();
+				}
+				// Send server heartbeat every SERVER_HEARTBEAT_TICKS ticks
+				if (matchState.heartbeat_count % SERVER_HEARTBEAT_TICKS == 0 && matchState.match_info_ready) {
+					sharedMemPtr->matchReport.send_heartbeat = true;
 				}
 			}
 		}

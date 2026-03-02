@@ -6,33 +6,6 @@
 #include "SharedMemory_t7.h"
 #include "steam_api.h"
 
-// -- Match Report -- //
-
-enum MatchEndReason : uint32_t {
-	MatchEndReason_Normal = 0,
-	MatchEndReason_Desync = 1,
-};
-
-struct MatchStartReport {
-	uint64_t reporter_steam_id;
-	uint64_t p1_steam_id;
-	uint64_t p2_steam_id;
-	uint32_t p1_char_id;
-	uint32_t p2_char_id;
-	uint32_t stage_id;
-	char     reporter_name[128];
-	char     client_version[16];
-};
-
-struct MatchEndReport {
-	uint8_t  match_id[16];
-	uint64_t reporter_steam_id;
-	uint32_t p1_wins;
-	uint32_t p2_wins;
-	uint32_t end_reason;
-	char     client_version[16];
-};
-
 // -- Packet -- //
 
 enum PacketT7Type_
@@ -165,7 +138,6 @@ public:
 		uint32_t p2_char_id = UINT32_MAX;
 		uint32_t stage_id = UINT32_MAX;
 		uint32_t end_reason = MatchEndReason_Normal;
-		uint8_t match_id[16] = {};
 
 		void Start(uint64_t now) {
 			active = true;
@@ -175,7 +147,6 @@ public:
 			last_heartbeat_time = now;
 			heartbeat_count = 0;
 			end_reason = MatchEndReason_Normal;
-			memset(match_id, 0, sizeof(match_id));
 			p1_char_id = UINT32_MAX;
 			p2_char_id = UINT32_MAX;
 			stage_id = UINT32_MAX;

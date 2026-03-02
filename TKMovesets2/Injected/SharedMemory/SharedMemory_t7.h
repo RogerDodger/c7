@@ -59,6 +59,39 @@ struct SharedMemT7_Extraprop
 	uint32_t value;
 };
 
+enum MatchEndReason : uint32_t {
+	MatchEndReason_Normal = 0,
+	MatchEndReason_Desync = 1,
+};
+
+struct SharedMemT7_MatchReport
+{
+	// DLL sets these flags, GUI reads and clears them
+	bool send_start;
+	bool send_end;
+	bool send_heartbeat;
+
+	// Match data (DLL writes, GUI reads)
+	uint64_t reporter_steam_id;
+	uint64_t p1_steam_id;
+	uint64_t p2_steam_id;
+	uint32_t p1_char_id;
+	uint32_t p2_char_id;
+	uint32_t stage_id;
+	char     reporter_name[128];
+	char     client_version[16];
+	uint32_t end_reason;
+	uint32_t p1_wins;
+	uint32_t p2_wins;
+
+	// Steam auth ticket (DLL writes when setting send_start or send_end)
+	uint8_t  auth_ticket[1024];
+	uint16_t auth_ticket_len;
+
+	// GUI writes match_id after server responds to /match/start
+	uint8_t  match_id[16];
+};
+
 struct SharedMemT7 : SharedMemBase
 {
 	// List of players to send custom movesets to
@@ -69,4 +102,6 @@ struct SharedMemT7 : SharedMemBase
 	SharedMemT7_Char chars[60];
 	// Active custom moveset addresses currently in use by players (do not free on shutdown)
 	uint64_t activeCustomMovesetAddr[2] = {0, 0};
+	// Match reporting data shared between DLL and GUI
+	SharedMemT7_MatchReport matchReport = {};
 };

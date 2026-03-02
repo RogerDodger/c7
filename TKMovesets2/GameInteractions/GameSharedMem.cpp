@@ -81,6 +81,12 @@ void GameSharedMem::RunningUpdate()
 		if (m_sharedMemHandler->versionMismatch) {
 			m_sharedMemHandler->VerifyDllVersionMismatch();
 		}
+
+		// Poll match reporting flags from shared memory
+		auto* sharedMem = static_cast<SharedMemT7*>(m_sharedMemHandler->GetSharedMemPtr());
+		if (sharedMem) {
+			m_matchReporter.Poll(sharedMem->matchReport);
+		}
 	}
 
 	CheckNameTag();
