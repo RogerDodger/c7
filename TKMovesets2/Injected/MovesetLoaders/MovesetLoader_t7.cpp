@@ -358,17 +358,22 @@ namespace T7Hooks
 			uint64_t result = g_loader->CastTrampoline<T7Functions::NetManager::GetSyncBattleStart>("TK__NetManager::GetSyncBattleStart")(a1);
 
 			if (result == 1 && !g_loader->matchState.active) {
-				uint64_t now = Helpers::getCurrentTimestamp();
-				g_loader->matchState.Start(now);
-
-				// Read match info
 				uint64_t localSteamId = SteamHelper::SteamUser()->GetSteamID().ConvertToUint64();
-				bool localIsP1 = IsLocalPlayerP1();
-				g_loader->matchState.p1_steam_id = localIsP1 ? localSteamId : g_loader->matchState.opponent_steam_id;
-				g_loader->matchState.p2_steam_id = localIsP1 ? g_loader->matchState.opponent_steam_id : localSteamId;
+				uint64_t opponentId = g_loader->matchState.opponent_steam_id;
 
-				DEBUG_LOG("[MatchReport] Match started: p1=%llu p2=%llu\n",
-					g_loader->matchState.p1_steam_id, g_loader->matchState.p2_steam_id);
+				if (opponentId == 0 || opponentId == localSteamId) {
+					DEBUG_LOG("[MatchReport] Ignoring match start — no valid opponent (spectator)\n");
+				} else {
+					uint64_t now = Helpers::getCurrentTimestamp();
+					g_loader->matchState.Start(now);
+
+					bool localIsP1 = IsLocalPlayerP1();
+					g_loader->matchState.p1_steam_id = localIsP1 ? localSteamId : opponentId;
+					g_loader->matchState.p2_steam_id = localIsP1 ? opponentId : localSteamId;
+
+					DEBUG_LOG("[MatchReport] Match started: p1=%llu p2=%llu\n",
+						g_loader->matchState.p1_steam_id, g_loader->matchState.p2_steam_id);
+				}
 			}
 
 			return result;

@@ -5,7 +5,6 @@
 #include "SharedMemory_t7.h"
 
 // Binary report structs sent over HTTP to the match server
-#pragma pack(push, 1)
 struct MatchStartReport {
 	uint64_t reporter_steam_id;
 	uint64_t p1_steam_id;
@@ -25,7 +24,6 @@ struct MatchEndReport {
 	uint32_t end_reason;
 	char     client_version[16];
 };
-#pragma pack(pop)
 
 class MatchReporter
 {

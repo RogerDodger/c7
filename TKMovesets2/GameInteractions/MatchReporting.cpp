@@ -7,8 +7,8 @@
 #include <vector>
 #include <cstring>
 
-static constexpr const wchar_t* SERVER_HOST = L"192.168.1.126";
-static constexpr INTERNET_PORT SERVER_PORT = 8080;
+static constexpr const wchar_t* SERVER_HOST = L"c7-server.cthor.me";
+static constexpr INTERNET_PORT SERVER_PORT = INTERNET_DEFAULT_HTTPS_PORT;
 static constexpr int HTTP_TIMEOUT_MS = 5000;
 
 #define WIDE2(x) L##x
@@ -25,7 +25,7 @@ std::vector<uint8_t> MatchReporter::PostToServer(const wchar_t* path, const void
 	HINTERNET hConnect = WinHttpConnect(hSession, SERVER_HOST, SERVER_PORT, 0);
 	if (!hConnect) { DEBUG_LOG("[MatchReport] WinHttpConnect failed\n"); WinHttpCloseHandle(hSession); return response; }
 
-	HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
+	HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
 	if (!hRequest) { DEBUG_LOG("[MatchReport] WinHttpOpenRequest failed\n"); WinHttpCloseHandle(hConnect); WinHttpCloseHandle(hSession); return response; }
 
 	WinHttpSetTimeouts(hRequest, HTTP_TIMEOUT_MS, HTTP_TIMEOUT_MS, HTTP_TIMEOUT_MS, HTTP_TIMEOUT_MS);

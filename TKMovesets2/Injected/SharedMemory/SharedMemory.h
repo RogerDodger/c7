@@ -1,5 +1,7 @@
 #pragma once
 
+#include <windows.h>
+
 enum MovesetLoaderMode_
 {
 	MovesetLoaderMode_Invalid = 0,
