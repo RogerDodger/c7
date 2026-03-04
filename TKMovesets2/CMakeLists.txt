@@ -290,46 +290,46 @@ if (${CMAKE_TKM_BUILD_TYPE} MATCHES "Debug")
 else()
     set(RC_FILE "app.rc")
 endif()
-add_executable (TKMovesets2 WIN32 ${BINARY_SOURCES} ${EMBEDDED_RESOURCES} ${MOVESET_LOADER_EMBEDDED} ${RC_FILE})
+add_executable (c7 WIN32 ${BINARY_SOURCES} ${EMBEDDED_RESOURCES} ${MOVESET_LOADER_EMBEDDED} ${RC_FILE})
 if (${CMAKE_TKM_BUILD_TYPE} MATCHES "Debug")
-    target_compile_definitions(TKMovesets2 PUBLIC BUILD_TYPE_DEBUG)
+    target_compile_definitions(c7 PUBLIC BUILD_TYPE_DEBUG)
 endif()
 
-target_include_directories(TKMovesets2 PRIVATE ${INCLUDE_FOLDERS})
-add_dependencies(TKMovesets2 GameSpecific)
-add_dependencies(TKMovesets2 TKMovesetLoader)
-target_link_libraries(TKMovesets2 PRIVATE GameSpecific)
+target_include_directories(c7 PRIVATE ${INCLUDE_FOLDERS})
+add_dependencies(c7 GameSpecific)
+add_dependencies(c7 TKMovesetLoader)
+target_link_libraries(c7 PRIVATE GameSpecific)
 
 # Copy addresses file to build folder, even if it's already embedded '#
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Resources/game_addresses.ini" "game_addresses.ini" COPYONLY)
 # Copies TKMInterface folder containg extra, optional interface data (editor labels, maybe more later down the line)
-add_custom_command(TARGET TKMovesets2 PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/Resources/TKMInterface" "${CMAKE_CURRENT_BINARY_DIR}/TKMInterface")
+add_custom_command(TARGET c7 PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/Resources/TKMInterface" "${CMAKE_CURRENT_BINARY_DIR}/TKMInterface")
 
 ## Extra dependencies ##
 # Link the other libraries that we use #
 
 # OpenGL (Renderer)
 find_package(glad CONFIG REQUIRED)
-target_link_libraries(TKMovesets2 PRIVATE glad::glad)
+target_link_libraries(c7 PRIVATE glad::glad)
 
 # GLFW (Renderer)
 find_package(glfw3 CONFIG REQUIRED)
-target_link_libraries(TKMovesets2 PRIVATE glfw)
+target_link_libraries(c7 PRIVATE glfw)
 
 # ImGUI (Interface)
 find_package(imgui CONFIG REQUIRED)
-target_link_libraries(TKMovesets2 PRIVATE imgui::imgui)
+target_link_libraries(c7 PRIVATE imgui::imgui)
 target_link_libraries(GameSpecific PRIVATE imgui::imgui) # Only used for the color-defining includes
 
 # Compression. I tried LZMA but it was too slow even on the fastest preset, so we're using LZ4 for now
 ## LZ4
 find_package(lz4 CONFIG REQUIRED)
-target_link_libraries(TKMovesets2 PRIVATE lz4::lz4)
+target_link_libraries(c7 PRIVATE lz4::lz4)
 target_link_libraries(FileEmbedder PRIVATE lz4::lz4)
 target_link_libraries(TKMovesetLoader PRIVATE lz4::lz4)
 ## LZMA
 find_package(liblzma CONFIG REQUIRED)
-target_link_libraries(TKMovesets2 PRIVATE liblzma::liblzma)
+target_link_libraries(c7 PRIVATE liblzma::liblzma)
 target_link_libraries(FileEmbedder PRIVATE liblzma::liblzma)
 target_link_libraries(TKMovesetLoader PRIVATE liblzma::liblzma)
 
@@ -338,4 +338,4 @@ find_package(PolyHook_2 CONFIG REQUIRED)
 target_link_libraries(TKMovesetLoader PRIVATE PolyHook_2::PolyHook_2)
 
 # HTTP requests (WinHTTP) - linked to GUI app, not the injected DLL
-target_link_libraries(TKMovesets2 PRIVATE winhttp)
+target_link_libraries(c7 PRIVATE winhttp)

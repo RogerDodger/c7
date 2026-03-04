@@ -8,9 +8,9 @@
 #define DLLCONTENT __declspec(dllimport)
 #endif
 
-# define PROGRAM_FILENAME        "TKMovesets2.exe"
+# define PROGRAM_FILENAME        "c7.exe"
 # define PROGRAM_TITLE           "c7"
-# define PROGRAM_VERSION         "1.0.0.0.5"
+# define PROGRAM_VERSION         "1.0.0.0.6"
 # define PROGRAM_CLIENT_VERSION  "c7.dev"
 # define PROGRAM_NAMETAG         "[" PROGRAM_CLIENT_VERSION "] "
 # define PROGRAM_WIN_WIDTH       1280
