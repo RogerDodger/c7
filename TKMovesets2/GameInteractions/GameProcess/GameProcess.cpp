@@ -141,6 +141,7 @@ DWORD GameProcess::GetGamePID(const char* processName)
 {
 	HANDLE hProcessSnap;
 	PROCESSENTRY32W pe32{ 0 };
+	SetLastError(0);
 	hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
 	std::wstring w_processName = Helpers::string_to_wstring(processName);
@@ -176,6 +177,7 @@ std::vector<moduleEntry> GameProcess::GetModuleList() const
 
 	std::vector<moduleEntry> modules;
 
+	SetLastError(0);
 	moduleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, m_pid);
 
 	if (GetLastError() != ERROR_ACCESS_DENIED)
@@ -237,36 +239,43 @@ bool GameProcess::Attach(const char* processName, DWORD processExtraFlags)
 void GameProcess::Detach()
 {
 	if (m_processHandle != nullptr) {
-		// Helper to check if an address should be skipped
-		auto shouldSkip = [this](gameAddr addr) {
-			for (auto skipAddr : doNotFreeAddresses) {
-				if (addr == skipAddr) return true;
-			}
-			return false;
-		};
+		// Only free game memory if the process is still alive
+		DWORD exitCode = 0;
+		bool processAlive = GetExitCodeProcess(m_processHandle, &exitCode) && exitCode == STILL_ACTIVE;
 
-		// Free all allocated memory in the game process before detaching
-		DEBUG_LOG("Freeing allocated memory blocks (skipping %lld active)...\n", doNotFreeAddresses.size());
-		for (auto& [addr, size] : allocatedMemory) {
-			if (shouldSkip(addr)) {
-				DEBUG_LOG("Skipping active moveset %llx (size %lld)\n", addr, size);
-				continue;
+		if (processAlive) {
+			// Helper to check if an address should be skipped
+			auto shouldSkip = [this](gameAddr addr) {
+				for (auto skipAddr : doNotFreeAddresses) {
+					if (addr == skipAddr) return true;
+				}
+				return false;
+			};
+
+			// Free all allocated memory in the game process before detaching
+			DEBUG_LOG("Freeing allocated memory blocks (skipping %lld active)...\n", doNotFreeAddresses.size());
+			for (auto& [addr, size] : allocatedMemory) {
+				if (shouldSkip(addr)) {
+					DEBUG_LOG("Skipping active moveset %llx (size %lld)\n", addr, size);
+					continue;
+				}
+				DEBUG_LOG("Freeing game memory block %llx (size %lld)\n", addr, size);
+				VirtualFreeEx(m_processHandle, (LPVOID)addr, 0, MEM_RELEASE);
 			}
-			DEBUG_LOG("Freeing game memory block %llx (size %lld)\n", addr, size);
-			VirtualFreeEx(m_processHandle, (LPVOID)addr, 0, MEM_RELEASE);
+
+			// Also free any pending blocks in the to-free queue
+			DEBUG_LOG("Freeing %lld pending memory blocks...\n", m_toFree.size());
+			for (auto& [date, addr] : m_toFree) {
+				if (shouldSkip(addr)) {
+					DEBUG_LOG("Skipping active moveset %llx\n", addr);
+					continue;
+				}
+				DEBUG_LOG("Freeing pending game memory block %llx\n", addr);
+				VirtualFreeEx(m_processHandle, (LPVOID)addr, 0, MEM_RELEASE);
+			}
 		}
+
 		allocatedMemory.clear();
-
-		// Also free any pending blocks in the to-free queue
-		DEBUG_LOG("Freeing %lld pending memory blocks...\n", m_toFree.size());
-		for (auto& [date, addr] : m_toFree) {
-			if (shouldSkip(addr)) {
-				DEBUG_LOG("Skipping active moveset %llx\n", addr);
-				continue;
-			}
-			DEBUG_LOG("Freeing pending game memory block %llx\n", addr);
-			VirtualFreeEx(m_processHandle, (LPVOID)addr, 0, MEM_RELEASE);
-		}
 		m_toFree.clear();
 		doNotFreeAddresses.clear();
 
