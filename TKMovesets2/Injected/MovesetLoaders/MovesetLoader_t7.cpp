@@ -584,11 +584,17 @@ void MovesetLoaderT7::Mainloop()
 						matchState.p1_char_id = *(uint8_t*)(playerList[0] + charaIdOffset);
 						matchState.p2_char_id = *(uint8_t*)(playerList[1] + charaIdOffset);
 						matchState.stage_id = *(uint32_t*)variables["gTK_stage_id"];
+						uint32_t roundsToWin = *(uint32_t*)variables["gTK_roundstowin"];
 						matchState.match_info_ready = true;
 
-						DEBUG_LOG("[MatchReport] Match info ready: chars=%u/%u stage=%u\n",
-							matchState.p1_char_id, matchState.p2_char_id, matchState.stage_id);
-						SendMatchStart();
+						DEBUG_LOG("[MatchReport] Match info ready: chars=%u/%u stage=%u rounds_to_win=%u\n",
+							matchState.p1_char_id, matchState.p2_char_id, matchState.stage_id, roundsToWin);
+						if (roundsToWin != 3) {
+							DEBUG_LOG("[MatchReport] Skipping non-standard match (rounds_to_win=%u)\n", roundsToWin);
+							matchState.Stop();
+						} else {
+							SendMatchStart();
+						}
 					}
 				} else {
 					matchState.match_info_poll_count = 0;
