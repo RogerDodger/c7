@@ -164,30 +164,36 @@ ImportationErrcode_ ImporterT7::_Import_FromT7(const TKMovesetHeader* header, By
 
 	progress = 20;
 
+	// Apply moveset modifications (sidestep speed boost etc.)
+	// This may replace the moveset buffer and update s_moveset.
+	Byte* modifiedMoveset = ApplySidestepSpeedMod(offsets, moveset, s_moveset);
+	if (modifiedMoveset) moveset = modifiedMoveset;
+
+	// Get the table address
+	table = (gAddr::MovesetTable*)(moveset + offsets->tableBlock);
+
 	// Allocate our moveset in the game's memory, but we aren't gonna write on that for a while.
 	// The idea is to write on our moveset in our own memory (should be faster), then write it all at once on gameMoveset with a single m_process.writeBytes()
 	const gameAddr gameMoveset = m_process.allocateMem(s_moveset);
 	if (gameMoveset == 0) {
+		delete[] modifiedMoveset;
 		return ImportationErrcode_GameAllocationErr;
 	}
 	progress = 40;
 
 	// -- Conversions -- //
 
-	// Get the table address
-	table = (gAddr::MovesetTable*)(moveset + offsets->tableBlock);
-
 	CorrectMovesetInfoValues((MovesetInfo*)moveset, gameMoveset);
 
 	//Convert move offets into ptrs
 	ConvertMovesetIndexes(moveset, gameMoveset, table, offsets);
-	progress = 70;
+	progress = 60;
 
 	if (!BASIC_LOAD) {
 		// Fix moves that use characterID conditions to work
 		ApplyCharacterIDFixes(moveset, playerAddress, table, header, offsets);
 	}
-	progress = 85;
+	progress = 70;
 
 	// Turn our table offsets into ptrs. Do this only at the end because we actually need those offsets above
 	ConvertMovesetTableOffsets(offsets, moveset, gameMoveset);
@@ -247,6 +253,7 @@ ImportationErrcode_ ImporterT7::_Import_FromT7(const TKMovesetHeader* header, By
 	lastLoaded.address = gameMoveset;
 	lastLoaded.size = s_moveset;
 
+	delete[] modifiedMoveset;
 	return ImportationErrcode_Successful;
 }
 

@@ -181,4 +181,88 @@ namespace T7ImportUtils
 			infos->current_aliases[i] = infos->orig_aliases[i];
 		}
 	}
+
+
+	Byte* ApplySidestepSpeedMod(const StructsT7::TKMovesetHeaderBlocks* offsets, Byte* moveset, uint64_t& s_moveset)
+	{
+		using namespace StructsT7;
+
+		auto* table = (StructsT7_gameAddr::MovesetTable*)(moveset + offsets->tableBlock);
+		auto* moves = (StructsT7_gameAddr::Move*)(moveset + offsets->movesetBlock + table->move);
+		auto* epArray = (ExtraMoveProperty*)(moveset + offsets->movesetBlock + table->extraMoveProperty);
+
+		// First pass: count how many new extraprop entries we need
+		size_t newEntryCount = 0;
+		for (size_t i = 0; i < table->moveCount; ++i) {
+			const char* name = (const char*)(moveset + offsets->nameBlock + moves[i].name_addr);
+			if (strncmp(name, "sSTEP", 5) == 0 ||
+				strncmp(name, "sWALK", 5) == 0 ||
+				strncmp(name, "sSIDE", 5) == 0)
+			{
+				// We need: existing entries + 1 new prop + 1 terminator
+				size_t existing = 0;
+				if (moves[i].extra_move_property_addr != (gameAddr)-1) {
+					ExtraMoveProperty* p = epArray + moves[i].extra_move_property_addr;
+					while (p[existing].id != 0) existing++;
+				}
+				newEntryCount += existing + 2;
+			}
+		}
+
+		if (newEntryCount == 0) return nullptr;
+
+		// Compute padding so appended data aligns with the extraMoveProperty array.
+		// FROM_INDEX computes: epArrayGameAddr + index * sizeof(ExtraMoveProperty)
+		// We need (appendStart - movesetBlock - table->extraMoveProperty) to be divisible by sizeof(ExtraMoveProperty).
+		uint64_t epOffset = offsets->movesetBlock + table->extraMoveProperty;
+		uint64_t rem = (s_moveset - epOffset) % sizeof(ExtraMoveProperty);
+		uint64_t padding = rem == 0 ? 0 : sizeof(ExtraMoveProperty) - rem;
+
+		uint64_t appendStart = s_moveset + padding;
+		uint64_t extraSize = padding + newEntryCount * sizeof(ExtraMoveProperty);
+		uint64_t newSize = s_moveset + extraSize;
+
+		// Allocate new buffer and copy original data
+		Byte* newBuf = new Byte[newSize];
+		memcpy(newBuf, moveset, s_moveset);
+		memset(newBuf + s_moveset, 0, extraSize);
+
+		// Re-derive pointers from new buffer
+		table = (StructsT7_gameAddr::MovesetTable*)(newBuf + offsets->tableBlock);
+		moves = (StructsT7_gameAddr::Move*)(newBuf + offsets->movesetBlock + table->move);
+		epArray = (ExtraMoveProperty*)(newBuf + offsets->movesetBlock + table->extraMoveProperty);
+
+		// Second pass: build new extraprop lists and update move indices
+		uint64_t baseIndex = (appendStart - epOffset) / sizeof(ExtraMoveProperty);
+		ExtraMoveProperty* dest = (ExtraMoveProperty*)(newBuf + appendStart);
+
+		for (size_t i = 0; i < table->moveCount; ++i) {
+			const char* name = (const char*)(newBuf + offsets->nameBlock + moves[i].name_addr);
+			if (strncmp(name, "sSTEP", 5) != 0 &&
+				strncmp(name, "sWALK", 5) != 0 &&
+				strncmp(name, "sSIDE", 5) != 0)
+				continue;
+
+			DEBUG_LOG("SidestepSpeedMod: matched move %llu '%s'\n", i, name);
+			size_t listIndex = baseIndex + (dest - (ExtraMoveProperty*)(newBuf + appendStart));
+
+			// Copy existing entries
+			if (moves[i].extra_move_property_addr != (gameAddr)-1) {
+				ExtraMoveProperty* src = epArray + moves[i].extra_move_property_addr;
+				while (src->id != 0) {
+					*dest++ = *src++;
+				}
+			}
+
+			// Speed property and terminator
+			*dest++ = { 32769, 0x81d6, {5120} };
+			*dest++ = { 0, 0, {0} };
+
+			moves[i].extra_move_property_addr = (gameAddr)listIndex;
+		}
+
+		s_moveset = newSize;
+		DEBUG_LOG("ApplySidestepSpeedMod: patched moves, buffer grew by %llu bytes\n", extraSize);
+		return newBuf;
+	}
 }

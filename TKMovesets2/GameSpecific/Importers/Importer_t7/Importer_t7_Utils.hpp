@@ -21,4 +21,9 @@ namespace T7ImportUtils
 
 	// Enforce the original aliases as the current one
 	void EnforceDefaultAliasesAsCurrent(Byte* moveset);
+
+	// Modify moveset to add speed extraprop (0x81d6) to sidestep/walk moves.
+	// Returns a new buffer with the modifications (caller must delete[]) and updates s_moveset,
+	// or returns nullptr if no changes were needed.
+	Byte* ApplySidestepSpeedMod(const StructsT7::TKMovesetHeaderBlocks* offsets, Byte* moveset, uint64_t& s_moveset);
 }
