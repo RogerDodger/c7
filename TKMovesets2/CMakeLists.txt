@@ -336,6 +336,16 @@ message(STATUS "c7 version: ${PROGRAM_VERSION} -> "
 set(C7_ICON_PATH       "${CMAKE_CURRENT_SOURCE_DIR}/tkm.ico")
 set(C7_ICON_DEBUG_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tkm_debug.ico")
 
+# Generate the application manifest from c7.manifest.in (substitutes
+# PROGRAM_VERSION) into the build dir, then record its absolute path so
+# app.rc.in can reference it as an RT_MANIFEST resource.
+set(C7_MANIFEST_PATH "${CMAKE_CURRENT_BINARY_DIR}/c7.manifest")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/c7.manifest.in"
+    "${C7_MANIFEST_PATH}"
+    @ONLY
+)
+
 # Generate app.rc into the build dir. @ONLY restricts substitution to @VAR@
 # (not ${VAR}) so we don't accidentally interpolate anything else.
 set(_C7_GENERATED_RC "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
@@ -354,6 +364,15 @@ endif()
 add_executable (c7 WIN32 ${BINARY_SOURCES} ${EMBEDDED_RESOURCES} ${MOVESET_LOADER_EMBEDDED} "${_C7_GENERATED_RC}")
 if (${CMAKE_TKM_BUILD_TYPE} MATCHES "Debug")
     target_compile_definitions(c7 PUBLIC BUILD_TYPE_DEBUG)
+endif()
+
+# Disable MSVC's automatic manifest generation so our RT_MANIFEST resource
+# embedded via app.rc is the only manifest in the final binary. Without
+# /MANIFEST:NO the linker generates its own default manifest and mt.exe
+# tries to merge it with ours; depending on toolchain version that either
+# produces a merged-but-unexpected manifest or fails the build outright.
+if (MSVC)
+    target_link_options(c7 PRIVATE "/MANIFEST:NO")
 endif()
 
 target_include_directories(c7 PRIVATE ${INCLUDE_FOLDERS})

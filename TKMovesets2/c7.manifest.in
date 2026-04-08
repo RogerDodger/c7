@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  c7.manifest.in — CMake template for the Win32 application manifest embedded
+  into c7.exe as resource (1, RT_MANIFEST).
+
+  Generated to ${CMAKE_CURRENT_BINARY_DIR}/c7.manifest by configure_file(), and
+  referenced from the generated app.rc by absolute path (same approach as the
+  icon files).
+
+  Why this manifest exists:
+    1) Defender's ML classifier treats "unmanifested PE doing process
+       injection" as a dropper signal. Every modern Windows app ships with a
+       manifest; c7 had none, which stood out.
+    2) asInvoker + uiAccess=false is an explicit statement that c7 does NOT
+       need admin and does NOT cross UI privilege boundaries. The absence of
+       a trustInfo block is sometimes read by heuristics as "this binary is
+       vague about privilege requirements", which correlates with malware.
+    3) supportedOS + DPI-aware + long-path-aware declarations make c7 look
+       like a normal modern Windows GUI app rather than a minimal stub.
+
+  None of this changes runtime behavior meaningfully beyond enabling
+  PerMonitor DPI scaling and opting in to long paths, both of which are
+  improvements.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+
+  <!-- Identity. `version` is substituted from PROGRAM_VERSION in constants.h
+       so Properties → Details and the manifest stay in sync. Note: for a
+       standalone EXE the manifest identity version is cosmetic — Windows
+       doesn't use it for side-by-side assembly resolution since there's
+       nothing to resolve against. It's mostly for symmetry with VERSIONINFO. -->
+  <assemblyIdentity
+      type="win32"
+      name="c7"
+      version="@PROGRAM_VERSION_DOTTED4@"
+      processorArchitecture="amd64"/>
+
+  <!-- Declare which Windows versions we know about. This is NOT a list of
+       OSes c7 is allowed to run on — unlisted versions still work, they
+       just get Windows' compat shims applied. Declaring a version tells
+       Windows "don't shim; give me real behavior for this version", which
+       is only safe for versions the app has actually been tested on.
+       Windows 10 and Windows 11 share the same GUID (Microsoft never
+       minted a separate Win11 one); that single entry covers both.
+       Win 7, 8, and 8.1 are NOT listed because c7 has not been validated
+       on them. Users on those OSes will still be able to run c7; Windows
+       will transparently apply compat shims as needed. -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 / 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
+
+  <!-- UAC trust info. `asInvoker` means "run with the privileges of whoever
+       launched me" — no elevation prompt, no admin rights. `uiAccess=false`
+       means this process does NOT need cross-desktop UI automation rights
+       (those are for assistive tech / screen readers and would be a red
+       flag for a mod). Making this explicit is the biggest single reason
+       the manifest matters for AV scoring. -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <!-- Modern Windows GUI declarations: PerMonitorV2 DPI awareness (so c7
+       doesn't look blurry on scaled displays) and long-path awareness (lets
+       file paths exceed MAX_PATH / 260 chars when the OS supports it). -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <!-- dpiAware is the v1 schema; dpiAwareness is the v2 schema. Ship both
+           for compatibility with older Windows 10 builds that only read v1. -->
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/PM</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+    </windowsSettings>
+  </application>
+
+</assembly>
