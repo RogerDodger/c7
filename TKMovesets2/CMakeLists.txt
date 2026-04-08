@@ -284,13 +284,74 @@ if (${CMAKE_TKM_BUILD_TYPE} MATCHES "Debug")
 endif()
 
 # Build program .exe
-enable_language("RC") # Icon and more resources later, if needed
-if (${CMAKE_TKM_BUILD_TYPE} MATCHES "Debug")
-    set(RC_FILE "app_debug.rc")
-else()
-    set(RC_FILE "app.rc")
+enable_language("RC")
+
+# --- Version single-source-of-truth ---
+# Parse PROGRAM_VERSION out of Utils/constants.h and use it to generate app.rc
+# from app.rc.in. constants.h is the only place anyone has to edit when
+# bumping the version. The RC compiler can't include constants.h directly
+# because constants.h pulls in C++ types and ImGui macros, so we extract the
+# version string at configure time and substitute it into the resource file.
+set(_C7_CONSTANTS_H "${CMAKE_CURRENT_SOURCE_DIR}/Utils/constants.h")
+
+# Re-run cmake configure if constants.h changes, otherwise the generated
+# app.rc would silently keep using a stale version after a bump.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_C7_CONSTANTS_H}")
+
+file(STRINGS "${_C7_CONSTANTS_H}" _C7_VERSION_LINE
+     REGEX "^[ \t]*#[ \t]*define[ \t]+PROGRAM_VERSION[ \t]+\"[0-9.]+\"")
+if (NOT _C7_VERSION_LINE)
+    message(FATAL_ERROR
+        "Could not find PROGRAM_VERSION in ${_C7_CONSTANTS_H}. "
+        "Expected a line like:  # define PROGRAM_VERSION  \"1.2.0\"")
 endif()
-add_executable (c7 WIN32 ${BINARY_SOURCES} ${EMBEDDED_RESOURCES} ${MOVESET_LOADER_EMBEDDED} ${RC_FILE})
+string(REGEX MATCH "\"([0-9.]+)\"" _C7_VERSION_QUOTED "${_C7_VERSION_LINE}")
+set(PROGRAM_VERSION "${CMAKE_MATCH_1}")
+
+# Split into components and pad to exactly 4 (major,minor,patch,build).
+# Anything missing becomes 0; anything beyond 4 is truncated.
+string(REPLACE "." ";" _C7_VERSION_PARTS "${PROGRAM_VERSION}")
+list(LENGTH _C7_VERSION_PARTS _C7_VERSION_NUM_PARTS)
+while(_C7_VERSION_NUM_PARTS LESS 4)
+    list(APPEND _C7_VERSION_PARTS "0")
+    list(LENGTH _C7_VERSION_PARTS _C7_VERSION_NUM_PARTS)
+endwhile()
+list(SUBLIST _C7_VERSION_PARTS 0 4 _C7_VERSION_PARTS_4)
+
+# Two forms used by VERSIONINFO: comma-separated for FILEVERSION/PRODUCTVERSION
+# (RC syntax) and dotted for the human-readable "FileVersion"/"ProductVersion"
+# string entries.
+string(REPLACE ";" "," PROGRAM_VERSION_COMMAS  "${_C7_VERSION_PARTS_4}")
+string(REPLACE ";" "." PROGRAM_VERSION_DOTTED4 "${_C7_VERSION_PARTS_4}")
+
+message(STATUS "c7 version: ${PROGRAM_VERSION} -> "
+               "FILEVERSION=${PROGRAM_VERSION_COMMAS} "
+               "FileVersion=${PROGRAM_VERSION_DOTTED4}")
+
+# Absolute paths to the icon files. rc.exe resolves bare relative resource
+# paths against the location of the .rc file being compiled — and we now
+# generate app.rc into the build dir, where the icons don't live. Using
+# absolute source-tree paths sidesteps that and any future build-dir moves.
+# CMake variables already use forward slashes, which rc.exe accepts.
+set(C7_ICON_PATH       "${CMAKE_CURRENT_SOURCE_DIR}/tkm.ico")
+set(C7_ICON_DEBUG_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tkm_debug.ico")
+
+# Generate app.rc into the build dir. @ONLY restricts substitution to @VAR@
+# (not ${VAR}) so we don't accidentally interpolate anything else.
+set(_C7_GENERATED_RC "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/app.rc.in"
+    "${_C7_GENERATED_RC}"
+    @ONLY
+)
+
+# app.rc handles both debug and release variants via #ifdef BUILD_TYPE_DEBUG.
+# Pass that define to rc.exe in debug builds so it picks the debug icon and
+# tags VERSIONINFO with VS_FF_DEBUG.
+if (${CMAKE_TKM_BUILD_TYPE} MATCHES "Debug")
+    set_source_files_properties("${_C7_GENERATED_RC}" PROPERTIES COMPILE_DEFINITIONS "BUILD_TYPE_DEBUG")
+endif()
+add_executable (c7 WIN32 ${BINARY_SOURCES} ${EMBEDDED_RESOURCES} ${MOVESET_LOADER_EMBEDDED} "${_C7_GENERATED_RC}")
 if (${CMAKE_TKM_BUILD_TYPE} MATCHES "Debug")
     target_compile_definitions(c7 PUBLIC BUILD_TYPE_DEBUG)
 endif()

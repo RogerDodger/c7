@@ -1,0 +1,91 @@
+// app.rc.in — CMake template for the c7.exe Win32 resource file.
+//
+// CMake reads PROGRAM_VERSION from Utils/constants.h, computes the comma-
+// separated and 4-component dotted forms, and substitutes them in below.
+// The generated app.rc lands in ${CMAKE_CURRENT_BINARY_DIR}/app.rc and is
+// what actually gets compiled by rc.exe. DO NOT edit the generated app.rc —
+// edit this template (or, for the version, edit constants.h).
+//
+// Single source of truth for the version: PROGRAM_VERSION in
+// TKMovesets2/Utils/constants.h. Bumping it triggers a CMake reconfigure
+// (via CMAKE_CONFIGURE_DEPENDS) which regenerates app.rc with the new
+// version baked into FILEVERSION, PRODUCTVERSION, FileVersion, and
+// ProductVersion all at once.
+//
+// Contains:
+//   1) The application icon (IDI_ICON1)
+//   2) A VS_VERSION_INFO block visible in Explorer's File Properties
+//
+// Why the VERSIONINFO block exists:
+//   c7.exe does DLL injection (VirtualAllocEx + WriteProcessMemory +
+//   CreateRemoteThread) by design — it's how the moveset loader gets into
+//   Tekken's address space. Unsigned PE binaries that perform process
+//   injection AND have no metadata score very high on Windows Defender's
+//   Behavior:Win32/DefenseEvasion.A!ml ML classifier, because that joint
+//   profile matches almost every commodity dropper. Adding real version
+//   info doesn't make c7 look like vendor software, but it stops the
+//   binary from looking like a maximally-anonymous dropper.
+//
+//   None of these strings change runtime behavior. They only affect what
+//   antivirus heuristics see and what users see in Properties → Details.
+//
+// Resource constant values used below (so we don't need to #include
+// <winres.h> / <windows.h> from this file):
+//   FILEFLAGSMASK 0x3fL          = VS_FFI_FILEFLAGSMASK (all valid flag bits)
+//   FILEFLAGS     0x0L           = no debug / patched / prerelease flags set
+//   FILEOS        0x40004L       = VOS_NT_WINDOWS32 (Windows NT family, 32/64 bit)
+//   FILETYPE      0x1L           = VFT_APP
+//   FILESUBTYPE   0x0L           = VFT2_UNKNOWN (irrelevant for VFT_APP)
+//   "040904b0"                   = LangID 0x0409 (en-US) + Charset 0x04B0 (1200, Unicode)
+//   Translation                  = same: language 0x0409, codepage 1200
+
+// Icon: debug builds use a distinct icon so they're visually identifiable
+// in the taskbar / Alt-Tab. CMake passes /D BUILD_TYPE_DEBUG to rc.exe for
+// debug builds, matching the same define passed to the C++ compiler.
+//
+// Paths are absolute (substituted by CMake from C7_ICON_PATH /
+// C7_ICON_DEBUG_PATH) because rc.exe resolves bare relative resource paths
+// against the .rc file's directory, and the generated app.rc lives in the
+// build dir while the icons live in the source dir.
+#ifdef BUILD_TYPE_DEBUG
+IDI_ICON1               ICON        DISCARDABLE            "@C7_ICON_DEBUG_PATH@"
+#else
+IDI_ICON1               ICON        DISCARDABLE            "@C7_ICON_PATH@"
+#endif
+
+1 VERSIONINFO
+FILEVERSION    @PROGRAM_VERSION_COMMAS@
+PRODUCTVERSION @PROGRAM_VERSION_COMMAS@
+FILEFLAGSMASK  0x3fL
+#ifdef BUILD_TYPE_DEBUG
+FILEFLAGS      0x1L              // VS_FF_DEBUG
+#else
+FILEFLAGS      0x0L
+#endif
+FILEOS         0x40004L
+FILETYPE       0x1L
+FILESUBTYPE    0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "6 weetbix\0"
+#ifdef BUILD_TYPE_DEBUG
+            VALUE "FileDescription",  "c7 - Tekken 7 balance mod (DEBUG BUILD)\0"
+#else
+            VALUE "FileDescription",  "c7 - Tekken 7 balance mod (custom movesets, match reporting)\0"
+#endif
+            VALUE "FileVersion",      "@PROGRAM_VERSION_DOTTED4@\0"
+            VALUE "InternalName",     "c7\0"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 6 weetbix. Based on TKMovesets2 by Kiloutre.\0"
+            VALUE "OriginalFilename", "c7.exe\0"
+            VALUE "ProductName",      "c7\0"
+            VALUE "ProductVersion",   "@PROGRAM_VERSION_DOTTED4@\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
