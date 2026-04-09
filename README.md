@@ -8,8 +8,9 @@ Features:
 * Works online if both players use it and should work with most other mods that don’t modify movesets.
 * Adds a tag to your display name to make coordinating with other players easier.
 * Reports all online FT3 matches between players running the mod to [Wavu Wank7](https://wank7.wavu.wiki/latest)
+* Disables infinites and Forgotten Realm from being selected by Random in stage select
 
-For detailed list of moveset changes, see https://cthor.me/c7.
+For a detailed list of moveset changes, see https://cthor.me/c7.
 
 ## Windows Defender Exclusion
 
