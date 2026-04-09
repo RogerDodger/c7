@@ -10,7 +10,7 @@
 
 # define PROGRAM_FILENAME        "c7.exe"
 # define PROGRAM_TITLE           "c7"
-# define PROGRAM_VERSION         "1.2.1"
+# define PROGRAM_VERSION         "1.2.2"
 # define PROGRAM_CLIENT_VERSION  "c7v1.2"
 # define PROGRAM_NAMETAG         "[" PROGRAM_CLIENT_VERSION "] "
 # define PROGRAM_WIN_WIDTH       1280
