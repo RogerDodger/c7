@@ -366,13 +366,49 @@ if (${CMAKE_TKM_BUILD_TYPE} MATCHES "Debug")
     target_compile_definitions(c7 PUBLIC BUILD_TYPE_DEBUG)
 endif()
 
-# Disable MSVC's automatic manifest generation so our RT_MANIFEST resource
-# embedded via app.rc is the only manifest in the final binary. Without
-# /MANIFEST:NO the linker generates its own default manifest and mt.exe
-# tries to merge it with ours; depending on toolchain version that either
-# produces a merged-but-unexpected manifest or fails the build outright.
+# MSVC-specific tweaks for the c7.exe target:
+#   1) Disable auto-generated manifest so our RT_MANIFEST resource is the
+#      only manifest in the final binary (see app.rc.in comment). Without
+#      /MANIFEST:NO the linker generates its own and mt.exe tries to merge
+#      them, which either produces a merged-but-unexpected manifest or
+#      fails the build outright depending on toolchain version.
+#
+#   2) Hardening flags. These set bits in the PE IMAGE_DLLCHARACTERISTICS
+#      field that Defender's ML classifier reads as a "modern hardened
+#      binary" signal, and provide real runtime security on top of that.
+#
+#      /DYNAMICBASE, /HIGHENTROPYVA, /NXCOMPAT are default-on for MSVC
+#      Release x64 builds, but listing them explicitly means (a) they're
+#      verifiable via `dumpbin /headers c7.exe | findstr "DLL character"`
+#      and (b) they can't be accidentally unset by a future toolchain or
+#      CMake preset change.
+#
+#      /GUARD:CF (Control Flow Guard) is the only one that's NOT default
+#      and is the meaningful new addition here. It adds runtime indirect-
+#      call target validation. It requires matching /guard:cf on the
+#      compiler side — linker-only is a no-op. Applied only to c7.exe, not
+#      the injected DLL, because the DLL uses Polyhook to do runtime code
+#      patching and CFG's strict indirect-call rules can conflict with
+#      that; c7.exe has no such constraint.
+#
+#      /CETCOMPAT (Intel CET shadow stack) is deliberately NOT enabled
+#      here. It's a newer flag that marks the binary as compatible with
+#      hardware shadow-stack enforcement, but it requires ALL linked
+#      static libraries to also be CET-aware or they risk runtime
+#      crashes from legacy `ret` patterns. Without auditing every vcpkg
+#      dependency, it's not safe to enable blind. Consider adding later
+#      if a user reports a need for it.
 if (MSVC)
-    target_link_options(c7 PRIVATE "/MANIFEST:NO")
+    target_link_options(c7 PRIVATE
+        "/MANIFEST:NO"
+        "/DYNAMICBASE"
+        "/HIGHENTROPYVA"
+        "/NXCOMPAT"
+        "/GUARD:CF"
+    )
+    target_compile_options(c7 PRIVATE
+        "/guard:cf"
+    )
 endif()
 
 target_include_directories(c7 PRIVATE ${INCLUDE_FOLDERS})
